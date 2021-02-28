@@ -1,5 +1,6 @@
 import os
 import json
+from preprocessing import utils
 
 
 def read_dict(dictionary):  # used for test
@@ -10,6 +11,8 @@ def read_dict(dictionary):  # used for test
 
 def preprocessing(in_file, out_file, name):
     static_id = 1
+    count_ans = 0  # answerable
+    count_una = 0  # unanswerable
     with open(os.path.join(os.path.curdir, '../dataset', in_file)) as file:
         js_data = json.load(file)
         write_file = open(os.path.join(os.path.curdir, '../processed_dataset', out_file), 'w', encoding='utf-8')
@@ -41,8 +44,10 @@ def preprocessing(in_file, out_file, name):
                         return out_list
 
                     if write_qas['is_impossible']:
+                        count_una += 1
                         write_qas['plausible_answers'] = find_end_span(qas['plausible_answers'])
                     else:
+                        count_ans += 1
                         write_qas['answers'] = find_end_span(qas['answers'])
                     static_id += 1
                     write_questions.append(write_qas)
@@ -50,8 +55,10 @@ def preprocessing(in_file, out_file, name):
                 write_list.append(write_data)
         write_file.write(json.dumps(write_list, indent=1))
         write_file.close()
+        print('{}: Answerable {}, Unanswerable {}'.format(name, count_ans, count_una))
 
 
 if __name__ == '__main__':
-    preprocessing('train-squad2.0.json', 'train-squad2.0.json', 'squad2.0train')
+    # preprocessing('train-squad2.0.json', 'train-squad2.0.json', 'squad2.0train')
     preprocessing('dev-squad2.0.json', 'dev-squad2.0.json', 'squad2.0dev')
+    utils.generate_corrupted_dataset('dev-squad2.0.json')
