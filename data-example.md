@@ -17,7 +17,7 @@ list of dict
 							 
 
 
-----------------------------------------------------------------------------------					 
+----------------------------------------------------------------------------------
 统一将数据清洗成如下格式（JSON）：
 
 list of dict
@@ -28,12 +28,12 @@ list of dict
 					 |--'id'
 					 |--'answers' 		  	-- list of dict
 											|--'text'
-											|--'answer_start'
-											|--'answer_end'
+											|--'start_span'
+											|--'end_span'
 					 |--'plausible_answers'	-- list of dict
 											|--'text'
-											|--'answer_start'
-											|--'answer_end'
+											|--'start_span'
+											|--'end_span'
 	 
 
 id遵循格式： 来自于哪个数据集 + id

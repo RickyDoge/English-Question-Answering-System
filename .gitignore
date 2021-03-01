@@ -134,3 +134,5 @@ exec/
 .DS_Store
 *.ipynb
 preprocessing/.idea
+processed_dataset/
+dataset/

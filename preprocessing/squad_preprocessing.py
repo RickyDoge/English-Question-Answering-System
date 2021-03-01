@@ -55,10 +55,12 @@ def preprocessing(in_file, out_file, name):
                 write_list.append(write_data)
         write_file.write(json.dumps(write_list, indent=1))
         write_file.close()
-        print('{}: Answerable {}, Unanswerable {}'.format(name, count_ans, count_una))
+        print('{}: Unanswerable {}, Answerable {}'.format(name, count_una, count_ans))
+        print('Context count: {}'.format(len(write_list)))
 
 
 if __name__ == '__main__':
-    # preprocessing('train-squad2.0.json', 'train-squad2.0.json', 'squad2.0train')
+    preprocessing('train-squad2.0.json', 'train-squad2.0.json', 'squad2.0train')
     preprocessing('dev-squad2.0.json', 'dev-squad2.0.json', 'squad2.0dev')
-    utils.generate_corrupted_dataset('dev-squad2.0.json')
+    utils.data_argumentation('train-squad2.0.json', 'train-squad2.0.json', num=10000)
+    # 只对训练集数据增强

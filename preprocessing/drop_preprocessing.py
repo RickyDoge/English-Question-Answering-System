@@ -9,6 +9,7 @@ Created on Sat Feb 27 21:25:37 2021
 import re
 import os
 import json
+from preprocessing import utils
 
 # def preprocessing(in_file):
 in_file = "dev-drop.json"
@@ -51,11 +52,11 @@ with open(os.path.join(os.path.curdir, '../dataset', in_file)) as file:
                 except:
                     write_qa["is_impossible"] = True
                     typeErr_count += 1
-                    
+
             write_qa["id"] = "{} {}".format(name, static_id)
             write_qa["answers"] = []
             write_qa["plausible_answers"] = []
-            
+
             if write_qa["is_impossible"] == False:
                 write_qa["answers"].append(write_answer)
                 # validated_answers = qa["validated_answers"]
@@ -71,36 +72,18 @@ with open(os.path.join(os.path.curdir, '../dataset', in_file)) as file:
                 #         write_answer["start_span"] = answer_span[0]
                 #         write_answer["end_span"] = answer_span[1]
                 #         write_qa["answers"].append(write_answer)
-                        
-            write_questions.append(write_qa)    
+
+            write_questions.append(write_qa)
             static_id += 1
         write_data["questions"] = write_questions
         write_list.append(write_data)
     write_file.write(json.dumps(write_list, indent=1))
     write_file.close()
-    
+
 print("Answerable question count: {}".format(possible_Q_count))
 print("Unanswerable question count: {}".format(impossible_Q_count))
 
-        
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-
+utils.data_argumentation('train-drop.json', 'train-drop.json', num=1000)
 
 # Q = "Before the UNPROFOR fully deployed, the HV clashed with an armed force of the RSK in the village of Nos Kalik, located in a pink zone near Sibenik, and captured the village at 4:45 p.m. on 2 March 1992. The JNA formed a battlegroup to counterattack the next day."
 # print(re.search("2 March 1992", Q).span())
