@@ -39,7 +39,7 @@ def test(valid_iterator, model):
         impossible_loss = cls_loss(cls_out, is_impossibles)
         start_loss = start_end_loss(start_logits, start_position)
         end_loss = start_end_loss(end_logits, end_position)
-        loss = (start_loss + end_loss) / 2 + impossible_loss
+        loss = start_loss + end_loss + impossible_loss
 
         loss_sum += loss.item()
         loss_count += 1
@@ -92,7 +92,7 @@ def main(device, epoch=10):
     for e in range(epoch):
         for i, data in enumerate(train_iterator):
             model.train()
-            batch_encoding, is_impossibles, start_position, end_position, id = data
+            batch_encoding, is_impossibles, start_position, end_position, _ = data
             cls_out, start_logits, end_logits = model(batch_encoding['input_ids'].to(device),
                                                       attention_mask=batch_encoding['attention_mask'].to(device),
                                                       token_type_ids=batch_encoding['token_type_ids'].to(device),
@@ -100,7 +100,7 @@ def main(device, epoch=10):
             impossible_loss = cls_loss(cls_out, is_impossibles)
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
-            loss = (start_loss + end_loss) / 2 + impossible_loss
+            loss = start_loss + end_loss + impossible_loss
             print('Epoch {}, Iteration {}, Train Loss: {}'.format(e, i, loss.item()))
             optimizer.zero_grad()
             loss.backward()
@@ -111,4 +111,5 @@ def main(device, epoch=10):
 
 if __name__ == '__main__':
     device = get_device()
+    #device = torch.device('cpu')
     main(device, epoch=10)
