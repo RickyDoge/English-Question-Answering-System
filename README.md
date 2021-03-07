@@ -24,13 +24,7 @@ Please install:
    python -c "from transformers import pipeline; print(pipeline('sentiment-analysis')('I hate you'))"
    ```
 
-5. 进入节点后：
-
-   ```
-   sbatch train-standard.sh
-   ```
-
-6. 节点的指令：
+6. 一些节点的指令：
 
    ```
    squeue 查看当前job，最小化显示
@@ -53,12 +47,18 @@ Please install:
    ```
    
 
-7. 需要先在命令行里手动输入指令，下载模型
+6. 需要先在命令行里手动输入指令，下载模型
 
    ```
    from transformers import ElectraModel, ElectraTokenizerFast
    tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
    model = ElectraModel.from_pretrained('google/electra-small-discriminator')
+   ```
+
+7. 提交任务（使用8块GPU）：
+
+   ```
+   sbatch train-standard.sh
    ```
 
    
