@@ -16,7 +16,7 @@ def get_device():
     return device
 
 
-def test(valid_iterator, model):
+def test(valid_iterator, model, device):
     model.eval()
     cls_loss = nn.BCELoss()
     start_end_loss = nn.CrossEntropyLoss()
@@ -32,9 +32,12 @@ def test(valid_iterator, model):
 
     for data in valid_iterator:
         batch_encoding, is_impossibles, start_position, end_position, id = data
-        cls_out, start_logits, end_logits = model(batch_encoding['input_ids'],
-                                                  attention_mask=batch_encoding['attention_mask'],
-                                                  token_type_ids=batch_encoding['token_type_ids'],
+        is_impossibles = utils.move_to_device(is_impossibles, device)
+        start_position = utils.move_to_device(start_position, device)
+        end_position = utils.move_to_device(end_position, device)
+        cls_out, start_logits, end_logits = model(batch_encoding['input_ids'].to(device),
+                                                  attention_mask=batch_encoding['attention_mask'].to(device),
+                                                  token_type_ids=batch_encoding['token_type_ids'].to(device),
                                                   )
         impossible_loss = cls_loss(cls_out, is_impossibles)
         start_loss = start_end_loss(start_logits, start_position)
@@ -69,9 +72,9 @@ def main(device, epoch=10):
     config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=128, shuffle=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=32, shuffle=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=128, shuffle=False,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=32, shuffle=False,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
     train_iterator = iter(dataloader_train)
     valid_iterator = iter(dataloader_valid)
@@ -93,10 +96,14 @@ def main(device, epoch=10):
         for i, data in enumerate(train_iterator):
             model.train()
             batch_encoding, is_impossibles, start_position, end_position, _ = data
+            is_impossibles = utils.move_to_device(is_impossibles, device)
+            start_position = utils.move_to_device(start_position, device)
+            end_position = utils.move_to_device(end_position, device)
             cls_out, start_logits, end_logits = model(batch_encoding['input_ids'].to(device),
                                                       attention_mask=batch_encoding['attention_mask'].to(device),
                                                       token_type_ids=batch_encoding['token_type_ids'].to(device),
                                                       )
+            print(is_impossibles.device, cls_out.device)
             impossible_loss = cls_loss(cls_out, is_impossibles)
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
@@ -105,7 +112,7 @@ def main(device, epoch=10):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        valid_loss, cls_acc, f1_score = test(valid_iterator, model)
+        valid_loss, cls_acc, f1_score = test(valid_iterator, model, device)
         print('Epoch{}, Valid loss {}, Classification Acc {}, F1-score {}'.format(e, valid_loss, cls_acc, f1_score))
 
 
