@@ -3,17 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as tud
 import torch.optim as optim
+import logging
 from transformers import ElectraTokenizerFast
 from model import utils
 from model.baseline import BaselineModel
 from model.dataset import my_collate_fn, QuestionAnsweringDatasetConfiguration, QuestionAnsweringDataset
 from functools import partial
-
-
-def get_device():
-    print('Use GPU' if torch.cuda.is_available() else 'Use CPU')
-    device = torch.device('cuda')
-    return device
 
 
 def test(valid_iterator, model, device):
@@ -64,9 +59,19 @@ def test(valid_iterator, model, device):
     return loss_sum / loss_count, cls_correct_count / cls_total_count, f1_sum / f1_count
 
 
-def main(device, epoch=10):
+def main(epoch=10):
     torch.random.manual_seed(2020)
     torch.manual_seed(2020)
+
+    # log
+    logger = logging.getLogger()
+    logger.setLevel(level=logging.INFO)
+    handler = logging.FileHandler("log.log")
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
     # load dataset
     tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
 
@@ -74,9 +79,9 @@ def main(device, epoch=10):
     config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=16, shuffle=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=64, shuffle=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=8, shuffle=False,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=64, shuffle=False,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
     train_iterator = iter(dataloader_train)
     valid_iterator = iter(dataloader_valid)
@@ -84,20 +89,38 @@ def main(device, epoch=10):
     # load pre-trained model
     model = BaselineModel()
     model.train()
-    model.to(device)
 
-    optimizer = optim.Adam(
-        [{'params': model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
-         {'params': model.cls_fc_layer.parameters(), 'lr': 1e-3},
-         {'params': model.span_detect_layer.parameters(), 'lr': 1e-3},
-         ])
+    # GPU Config:
+    if torch.cuda.device_count() > 1:
+        device = torch.cuda.current_device()
+        model.to(device)
+        model = nn.DataParallel(module=model)
+        print('Use Multi GPUs: ', device, '.Number of GPUs: ', torch.cuda.device_count())
+    elif torch.cuda.device_count() == 1:
+        device = torch.cuda.current_device()
+        model.to(device)
+        print('Use one GPU: ', device)
+    else:
+        device = torch.device('cpu')  # CPU
+        print("use CPU: ", device)
+
+    if torch.cuda.device_count() > 1:
+        optimizer = optim.Adam([{'params': model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+                                {'params': model.module.cls_fc_layer.parameters(), 'lr': 1e-3},
+                                {'params': model.module.span_detect_layer.parameters(), 'lr': 1e-3},
+                                ])
+    else:
+        optimizer = optim.Adam([{'params': model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+                                {'params': model.cls_fc_layer.parameters(), 'lr': 1e-3},
+                                {'params': model.span_detect_layer.parameters(), 'lr': 1e-3},
+                                ])
 
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
     start_end_loss = nn.CrossEntropyLoss()
 
     for e in range(epoch):
-        valid_loss, cls_acc, f1_score = test(valid_iterator, model, device)
-        print('Epoch {}, Valid loss {}, Classification Acc {}, F1-score {}'.format(e, valid_loss, cls_acc, f1_score))
+        valid_loss, cls_acc, f1 = test(valid_iterator, model, device)
+        logger.info('Epoch {}, Valid loss {}, Classification Acc {}, F1-score {}'.format(e, valid_loss, cls_acc, f1))
         for i, data in enumerate(train_iterator):
             model.train()
             batch_encoding, is_impossibles, start_position, end_position, _ = data
@@ -112,14 +135,12 @@ def main(device, epoch=10):
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
             loss = start_loss + end_loss + impossible_loss
-            if i % 500 == 0:
-                print('Epoch {}, Iteration {}, Train Loss: {}'.format(e, i, loss.item()))
+            if i % 1000 == 0:
+                logger.info('Epoch {}, Iteration {}, Train Loss: {}'.format(e, i, loss.item()))
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
 
 if __name__ == '__main__':
-    device = get_device()
-    # device = torch.device('cpu')
-    main(device, epoch=10)
+    main(epoch=10)
