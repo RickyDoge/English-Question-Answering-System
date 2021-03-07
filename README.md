@@ -2,30 +2,26 @@
 
 Please install:
 
-1. Pytorch
+1. PyTorch （集群上自带，不需要安装）
 
-2. Transformer
+2. Transformer（本地安装）
 
    ```
    conda install -c huggingface transformers
    ```
 
-3. In order to run on MLP cluster, please:
+3. Transformer（集群安装）
 
    ```
    source /home/${STUDENT_ID}/miniconda3/bin/activate mlp
-   conda install -c huggingface transformers
-   
+   pip install transformers
    conda install -c anaconda importlib-metadata
-   
-   curl -O http://ftp.gnu.org/gnu/glibc/glibc-2.18.tar.gz
-   tar xf  glibc-2.18.tar.gz
-   cd glibc-2.18
-   mkdir build
-   cd build
-   ../configure --prefix=/usr
-   make -j2
-   make install
    ```
 
-4. 
+4. 然后测试一下能不能运行：
+
+   ```
+   python -c "from transformers import pipeline; print(pipeline('sentiment-analysis')('I hate you'))"
+   ```
+
+5. 
