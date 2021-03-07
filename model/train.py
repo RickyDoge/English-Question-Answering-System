@@ -51,7 +51,7 @@ def test(valid_iterator, model, device):
         predict_end = torch.argmax(end_logits, dim=-1)
 
         cls_out = torch.argmax(cls_out, dim=-1)
-        cls_out = (cls_out == is_impossibles).float()
+        cls_out = (cls_out == is_impossibles.argmax(dim=-1)).float()
         cls_correct_count += torch.sum(cls_out)
         cls_total_count += cls_out.size(0)
 
@@ -65,6 +65,8 @@ def test(valid_iterator, model, device):
 
 
 def main(device, epoch=10):
+    torch.random.manual_seed(2020)
+    torch.manual_seed(2020)
     # load dataset
     tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
 
@@ -72,9 +74,9 @@ def main(device, epoch=10):
     config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=32, shuffle=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=16, shuffle=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=32, shuffle=False,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=8, shuffle=False,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
     train_iterator = iter(dataloader_train)
     valid_iterator = iter(dataloader_valid)
@@ -84,15 +86,18 @@ def main(device, epoch=10):
     model.train()
     model.to(device)
 
-    optimizer = optim.Adam([{'params': model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
-                            {'params': model.cls_fc_layer.parameters(), 'lr': 2e-3},
-                            {'params': model.span_detect_layer.parameters(), 'lr': 2e-3},
-                            ])
+    optimizer = optim.Adam(
+        [{'params': model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+         {'params': model.cls_fc_layer.parameters(), 'lr': 1e-3},
+         {'params': model.span_detect_layer.parameters(), 'lr': 1e-3},
+         ])
 
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
     start_end_loss = nn.CrossEntropyLoss()
 
     for e in range(epoch):
+        valid_loss, cls_acc, f1_score = test(valid_iterator, model, device)
+        print('Epoch {}, Valid loss {}, Classification Acc {}, F1-score {}'.format(e, valid_loss, cls_acc, f1_score))
         for i, data in enumerate(train_iterator):
             model.train()
             batch_encoding, is_impossibles, start_position, end_position, _ = data
@@ -103,20 +108,18 @@ def main(device, epoch=10):
                                                       attention_mask=batch_encoding['attention_mask'].to(device),
                                                       token_type_ids=batch_encoding['token_type_ids'].to(device),
                                                       )
-            print(is_impossibles.device, cls_out.device)
             impossible_loss = cls_loss(cls_out, is_impossibles)
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
             loss = start_loss + end_loss + impossible_loss
-            print('Epoch {}, Iteration {}, Train Loss: {}'.format(e, i, loss.item()))
+            if i % 500 == 0:
+                print('Epoch {}, Iteration {}, Train Loss: {}'.format(e, i, loss.item()))
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        valid_loss, cls_acc, f1_score = test(valid_iterator, model, device)
-        print('Epoch{}, Valid loss {}, Classification Acc {}, F1-score {}'.format(e, valid_loss, cls_acc, f1_score))
 
 
 if __name__ == '__main__':
     device = get_device()
-    #device = torch.device('cpu')
+    # device = torch.device('cpu')
     main(device, epoch=10)

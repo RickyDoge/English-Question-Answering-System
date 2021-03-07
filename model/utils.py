@@ -29,7 +29,6 @@ def calculate_recall(ps, pe, rs, re):
     overlap = min(case1, case2)
     overall = pe - ps
     if overall == 0:
-        print('warning')
         return 1.
     else:
         return overlap/overall
