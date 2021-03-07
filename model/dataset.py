@@ -24,7 +24,7 @@ class QuestionAnsweringDatasetConfiguration():
 
     def read_files_list(self):
         files_dir = []
-        main_dir = os.path.join(os.path.curdir, '..', 'processed_dataset')
+        main_dir = os.path.join(os.path.curdir, 'processed_dataset')
         if self.squad_train:
             files_dir.append(os.path.join(main_dir, 'train-squad2.0.json'))
         if self.squad_dev:

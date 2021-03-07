@@ -50,7 +50,15 @@ Please install:
    sprio 查看你当前任务的优先级
    scontrol show job <job_id> 查看job的所有信息
    scancel -u <user_id> 取消用户的所有任务
+   ```
    
+
+7. 需要先在命令行里手动输入指令，下载模型
+
+   ```
+   from transformers import ElectraModel, ElectraTokenizerFast
+   tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
+   model = ElectraModel.from_pretrained('google/electra-small-discriminator')
    ```
 
    
