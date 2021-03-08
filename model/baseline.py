@@ -6,11 +6,11 @@ import math
 from transformers import ElectraModel
 
 class BaselineModel(nn.Module):
-    def __init__(self):
+    def __init__(self, hidden_dim=256, clm_model='google/electra-small-discriminator'):
         super(BaselineModel, self).__init__()
-        self.pre_trained_clm = ElectraModel.from_pretrained('google/electra-small-discriminator')
-        self.cls_fc_layer = nn.Linear(256, 2, bias=True)
-        self.span_detect_layer = nn.Linear(256, 2, bias=True)
+        self.pre_trained_clm = ElectraModel.from_pretrained(clm_model)
+        self.cls_fc_layer = nn.Linear(hidden_dim, 2, bias=True)
+        self.span_detect_layer = nn.Linear(hidden_dim, 2, bias=True)
         nn.init.xavier_uniform_(self.cls_fc_layer.weight, gain=1 / math.sqrt(2))
         nn.init.xavier_uniform_(self.span_detect_layer.weight, gain=1 / math.sqrt(2))
         nn.init.constant_(self.cls_fc_layer.bias, 0.)

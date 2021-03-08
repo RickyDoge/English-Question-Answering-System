@@ -6,8 +6,8 @@ import json
 
 class QuestionAnsweringDatasetConfiguration():
     def __init__(self, squad_train=False, squad_dev=False, drop_train=False, drop_dev=False, newsqa_train=False,
-                 newsqa_dev=False, searchqa_train=False, searchqa_dev=False, trivialqa_train=False,
-                 trivialqa_dev=False):
+                 newsqa_dev=False, medhop_dev=False, medhop_train=False, quoref_dev=False, quoref_train=False,
+                 wikihop_dev=False, wikihop_train=False):
         exist_true = squad_train or squad_dev or drop_train or drop_dev or newsqa_train or newsqa_dev
         if not exist_true:
             raise Exception('Please give at least one dataset.')
@@ -17,10 +17,12 @@ class QuestionAnsweringDatasetConfiguration():
         self.drop_dev = drop_dev
         self.newsqa_train = newsqa_train
         self.newsqa_dev = newsqa_dev
-        self.searchqa_train = searchqa_train
-        self.searchqa_dev = searchqa_dev
-        self.trivialqa_train = trivialqa_train
-        self.trivialqa_dev = trivialqa_dev
+        self.medhop_dev = medhop_dev
+        self.medhop_train = medhop_train
+        self.quoref_dev = quoref_dev
+        self.quoref_train = quoref_train
+        self.wikihop_dev = wikihop_dev
+        self.wikihop_train = wikihop_train
 
     def read_files_list(self):
         files_dir = []
@@ -34,17 +36,21 @@ class QuestionAnsweringDatasetConfiguration():
         if self.drop_dev:
             files_dir.append(os.path.join(main_dir, 'dev-drop.json'))
         if self.newsqa_train:
-            pass
+            files_dir.append(os.path.join(main_dir, 'newsqa_train.json'))
         if self.newsqa_dev:
             files_dir.append(os.path.join(main_dir, 'newsqa_dev.json'))
-        if self.searchqa_train:
-            pass
-        if self.searchqa_dev:
-            pass
-        if self.trivialqa_train:
-            pass
-        if self.trivialqa_dev:
-            pass
+        if self.medhop_train:
+            files_dir.append(os.path.join(main_dir, 'train-medhop.json'))
+        if self.medhop_dev:
+            files_dir.append(os.path.join(main_dir, 'dev-medhop.json'))
+        if self.quoref_train:
+            files_dir.append(os.path.join(main_dir, 'train-quoref.json'))
+        if self.quoref_dev:
+            files_dir.append(os.path.join(main_dir, 'dev-quoref.json'))
+        if self.wikihop_train:
+            files_dir.append(os.path.join(main_dir, 'train-wikihop.json'))
+        if self.wikihop_dev:
+            files_dir.append(os.path.join(main_dir, 'dev-wikihop.json'))
         return files_dir
 
 
@@ -85,8 +91,8 @@ def my_collate_fn(batch, tokenizer):
     # tokenization and word2idx
     batch_encoding = tokenizer(contexts, questions, return_tensors='pt', padding=True, truncation=True)
     # answer span vector
-    start_position, end_position = char_span_to_char_span(batch_encoding, answers_batch, is_impossibles,
-                                                          max_length=tokenizer.model_max_length)
+    start_position, end_position = char_span_to_token_span(batch_encoding, answers_batch, is_impossibles,
+                                                           max_length=tokenizer.model_max_length)
 
     # is_impossible vector
     is_impossibles = torch.tensor([[0, 1] if is_impossible else [1, 0] for is_impossible in is_impossibles]).float()
@@ -94,7 +100,7 @@ def my_collate_fn(batch, tokenizer):
     return batch_encoding, is_impossibles, start_position, end_position, id
 
 
-def char_span_to_char_span(batch_encoding, answers_batch, is_impossibles, max_length=512):
+def char_span_to_token_span(batch_encoding, answers_batch, is_impossibles, max_length=512):
     # batch_size
     start_position = torch.zeros(batch_encoding['input_ids'].size(0))
     end_position = torch.zeros(batch_encoding['input_ids'].size(0))

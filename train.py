@@ -3,7 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as tud
 import torch.optim as optim
+import os
 import logging
+import argparse
 from transformers import ElectraTokenizerFast
 from model import utils
 from model.baseline import BaselineModel
@@ -64,9 +66,9 @@ def test(valid_iterator, model, device):
     return loss_sum / loss_count, cls_correct_count / cls_total_count, f1_sum / f1_count
 
 
-def main(epoch=10):
-    torch.random.manual_seed(2020)
-    torch.manual_seed(2020)
+def main(epoch=5, which_config='baseline-small', which_dataset='small', multitask_weight=0.5, seed=2020):
+    torch.random.manual_seed(seed)
+    torch.manual_seed(seed)
 
     # log
     logger = logging.getLogger()
@@ -77,11 +79,25 @@ def main(epoch=10):
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-    # load dataset
-    tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
+    # load configuration
+    if which_config == 'baseline-small':
+        hidden_dim = 256
+        which_model = 'google/electra-small-discriminator'
+    elif which_config == 'baseline-base':
+        hidden_dim = 768
+        which_model = 'google/electra-base-discriminator'
 
-    config_train = QuestionAnsweringDatasetConfiguration(squad_train=True)
-    config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
+    # load dataset
+    tokenizer = ElectraTokenizerFast.from_pretrained(which_model)
+    if which_dataset == 'small':
+        config_train = QuestionAnsweringDatasetConfiguration(squad_train=True)
+        config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
+    else:
+        config_train = QuestionAnsweringDatasetConfiguration(squad_train=True, squad_dev=False, drop_train=True,
+                                                             drop_dev=True, newsqa_train=True, newsqa_dev=True,
+                                                             medhop_dev=True, medhop_train=True, quoref_dev=True,
+                                                             quoref_train=True, wikihop_dev=True, wikihop_train=True)
+        config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
     dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=64, shuffle=True,
@@ -90,30 +106,33 @@ def main(epoch=10):
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
     # load pre-trained model
-    model = BaselineModel()
+    model = BaselineModel(clm_model=which_model, hidden_dim=hidden_dim)
     model.train()
+
+    if os.path.isfile('model_parameters.pth'):  # load previous best model
+        model.load_state_dict(torch.load('model_parameters.pth'))
 
     # GPU Config:
     if torch.cuda.device_count() > 1:
         device = torch.cuda.current_device()
         model.to(device)
         model = nn.DataParallel(module=model)
-        print('Use Multi GPUs: ', device, '.Number of GPUs: ', torch.cuda.device_count())
+        print('Use Multi GPUs. Number of GPUs: ', torch.cuda.device_count())
     elif torch.cuda.device_count() == 1:
         device = torch.cuda.current_device()
         model.to(device)
-        print('Use one GPU: ', device)
+        print('Use 1 GPU')
     else:
         device = torch.device('cpu')  # CPU
-        print("use CPU: ", device)
+        print("use CPU")
 
     if torch.cuda.device_count() > 1:
-        optimizer = optim.Adam([{'params': model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+        optimizer = optim.Adam([{'params': model.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
                                 {'params': model.module.cls_fc_layer.parameters(), 'lr': 1e-3},
                                 {'params': model.module.span_detect_layer.parameters(), 'lr': 1e-3},
                                 ])
     else:
-        optimizer = optim.Adam([{'params': model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+        optimizer = optim.Adam([{'params': model.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
                                 {'params': model.cls_fc_layer.parameters(), 'lr': 1e-3},
                                 {'params': model.span_detect_layer.parameters(), 'lr': 1e-3},
                                 ])
@@ -121,11 +140,12 @@ def main(epoch=10):
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
     start_end_loss = nn.CrossEntropyLoss()
 
+    best_score = 0.25  # f1 * cls_acc
+
     for e in range(epoch):
         train_iterator = iter(dataloader_train)
         valid_iterator = iter(dataloader_valid)
-        valid_loss, cls_acc, f1 = test(valid_iterator, model, device)
-        logger.info('Epoch {}, Valid loss {:.4f}, ClS Acc {:.4f}, F1-score {:.4f}'.format(e, valid_loss, cls_acc, f1))
+
         for i, data in enumerate(train_iterator):
             model.train()
             batch_encoding, is_impossibles, start_position, end_position, _ = data
@@ -139,13 +159,40 @@ def main(epoch=10):
             impossible_loss = cls_loss(cls_out, is_impossibles)
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
-            loss = start_loss + end_loss + impossible_loss
+            loss = start_loss + end_loss + impossible_loss * multitask_weight
             if i % 1000 == 0:
                 logger.info('Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, loss.item()))
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
+        valid_loss, cls_acc, f1 = test(valid_iterator, model, device)
+        logger.info('Epoch {}, Valid loss {:.4f}, ClS Acc {:.4f}, F1-score {:.4f}'.format(e, valid_loss, cls_acc, f1))
+
+        score = f1 * cls_acc
+        if score >= best_score:  # save the best model
+            best_score = score
+            torch.save(model.state_dict(), 'model_parameters.pth')
+
 
 if __name__ == '__main__':
-    main(epoch=5)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', type=str, help='which config')
+    parser.add_argument('-d', '--dataset', type=str, help='train on which dataset')
+    parser.add_argument('-w', '--multitask-weight', type=int, default=0.5, help='learn [CLS] and span jointly, given '
+                                                                                'the loss weight')
+    parser.add_argument('-s', '--seed', type=int, default=2020, help='random seed')
+    args = parser.parse_args()
+
+    config = args.config
+    dataset = args.dataset
+    weight = args.multitask_weight
+    seed = args.seed
+
+    CONFIG = ['baseline-small', 'baseline-base']
+    DATASET = ['small', 'normal']
+
+    assert config in CONFIG, 'Given config wrong'
+    assert dataset in DATASET, 'Given dataset wrong'
+    assert weight > 0, 'Given weight should be larger than zero'
+    main(epoch=5, which_config=config, which_dataset=dataset, multitask_weight=weight, seed=seed)
