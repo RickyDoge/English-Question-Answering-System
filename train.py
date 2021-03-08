@@ -180,8 +180,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', type=str, help='which config')
     parser.add_argument('-d', '--dataset', type=str, help='train on which dataset')
-    parser.add_argument('-w', '--multitask-weight', type=int, default=0.5, help='learn [CLS] and span jointly, given '
-                                                                                'the loss weight')
+    parser.add_argument('-w', '--multitask-weight', type=float, default=0.5, help='learn [CLS] and span jointly, given '
+                                                                                  'the loss weight')
     parser.add_argument('-s', '--seed', type=int, default=2020, help='random seed')
     args = parser.parse_args()
 

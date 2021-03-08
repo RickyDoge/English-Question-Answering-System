@@ -34,4 +34,4 @@ export DATASET_DIR=${TMP}/datasets/
 
 
 source /home/${STUDENT_ID}/miniconda3/bin/activate mlp
-python train.py
+python train.py -c baseline-small -d small -w 0.8
