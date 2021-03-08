@@ -121,7 +121,7 @@ def main(epoch=10):
     for e in range(epoch):
         valid_iterator = iter(dataloader_valid)
         valid_loss, cls_acc, f1 = test(valid_iterator, model, device)
-        logger.info('Epoch {}, Valid loss {}, Classification Acc {}, F1-score {}'.format(e, valid_loss, cls_acc, f1))
+        logger.info('Epoch {:.4f}, Valid loss {:.4f}, ClS Acc {:.4f}, F1-score {:.4f}'.format(e, valid_loss, cls_acc, f1))
         for i, data in enumerate(train_iterator):
             model.train()
             batch_encoding, is_impossibles, start_position, end_position, _ = data
@@ -137,7 +137,7 @@ def main(epoch=10):
             end_loss = start_end_loss(end_logits, end_position)
             loss = start_loss + end_loss + impossible_loss
             if i % 1000 == 0:
-                logger.info('Epoch {}, Iteration {}, Train Loss: {}'.format(e, i, loss.item()))
+                logger.info('Epoch {:.4f}, Iteration {:.4f}, Train Loss: {:.4f}'.format(e, i, loss.item()))
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
