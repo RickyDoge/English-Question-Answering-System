@@ -46,7 +46,6 @@ Please install:
    scancel -u <user_id> 取消用户的所有任务
    ```
    
-
 6. 需要先在命令行里手动输入指令，下载模型
 
    ```
@@ -61,4 +60,25 @@ Please install:
    sbatch train-standard.sh
    ```
 
+8. 不同的配置
+
+   小型ELECTRA Baseline，在小型数据集上跑（只有squad）
+
+   ```
+   python train.py -c baseline-small -d small
+   ```
+
+   中型ELECTRA Baseline，在小型数据集上跑（只有squad）
+
+   ```
+   python train.py -c baseline-base -d small
+   ```
+
+   中型ELECTRA Baseline，在全部数据集上跑（全部数据集，仅留squad-dev做验证集）
+
+   ```
+   python train.py -c baseline-base -d normal
+   ```
+
    
+
