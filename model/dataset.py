@@ -115,7 +115,7 @@ def char_span_to_token_span(batch_encoding, answers_batch, is_impossibles, max_l
             if end_span is None:
                 end_span = batch_encoding.char_to_token(batch_idx, answer['end_span'] + 1)  # add one space
                 if end_span is None:
-                    end_span = batch_encoding.char_to_token(batch_idx, answer['end_span'] + 2)  # add two space
+                    end_span = batch_encoding.char_to_token(batch_idx, answer['end_span'] + 1)  # add two space
             # write to tensor
             if start_span is not None:
                 start_position[batch_idx] = start_span

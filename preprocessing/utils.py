@@ -9,6 +9,8 @@ def count_answerable_and_unanswerable(js_list):
     count_ans = 0  # answerable
     for paragraph in js_list:
         for question in paragraph['questions']:
+            if len(question) == 0:
+                continue
             if question['is_impossible']:
                 count_una += 1
             else:
