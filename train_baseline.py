@@ -29,7 +29,7 @@ def test(valid_iterator, model, device):
 
     with torch.no_grad():
         for data in valid_iterator:
-            batch_encoding, is_impossibles, start_position, end_position, id = data
+            batch_encoding, is_impossibles, start_position, end_position, _ = data
             is_impossibles = utils.move_to_device(is_impossibles, device)
             start_position = utils.move_to_device(start_position, device)
             end_position = utils.move_to_device(end_position, device)
@@ -66,7 +66,7 @@ def test(valid_iterator, model, device):
     return loss_sum / loss_count, cls_correct_count / cls_total_count, f1_sum / f1_count
 
 
-def main(epoch=5, which_config='baseline-small', which_dataset='small', multitask_weight=0.5, seed=2020):
+def main(epoch=4, which_config='baseline-small', which_dataset='small', multitask_weight=0.5, seed=2020):
     torch.random.manual_seed(seed)
     torch.manual_seed(seed)
 
@@ -100,9 +100,9 @@ def main(epoch=5, which_config='baseline-small', which_dataset='small', multitas
         config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=64, shuffle=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=48, shuffle=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=64, shuffle=False,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=48, shuffle=False,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
     # load pre-trained model
@@ -143,11 +143,11 @@ def main(epoch=5, which_config='baseline-small', which_dataset='small', multitas
     if os.path.isfile('model_parameters.pth'):  # load previous best model
         model.load_state_dict(torch.load('model_parameters.pth'))
 
-    for e in range(epoch):
-        train_iterator = iter(dataloader_train)
-        valid_iterator = iter(dataloader_valid)
+    valid_loss, cls_acc, f1 = test(iter(dataloader_valid), model, device)
+    logger.info('Initial result: Valid loss {:.4f}, ClS Acc {:.4f}, F1-score {:.4f}'.format(valid_loss, cls_acc, f1))
 
-        for i, data in enumerate(train_iterator):
+    for e in range(epoch):
+        for i, data in enumerate(iter(dataloader_train)):
             model.train()
             batch_encoding, is_impossibles, start_position, end_position, _ = data
             is_impossibles = utils.move_to_device(is_impossibles, device)
@@ -163,17 +163,18 @@ def main(epoch=5, which_config='baseline-small', which_dataset='small', multitas
             loss = start_loss + end_loss + impossible_loss * multitask_weight
             if i % 1000 == 0:
                 logger.info('Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, loss.item()))
+
+                valid_loss, cls_acc, f1 = test(iter(dataloader_valid), model, device)
+                logger.info('Epoch {}, Iteration {}, Valid loss {:.4f}, ClS Acc {:.4f}, F1-score {:.4f}'
+                            .format(e, i, valid_loss, cls_acc, f1))
+
+                score = f1 * cls_acc
+                if score >= best_score:  # save the best model
+                    best_score = score
+                    torch.save(model.state_dict(), 'model_parameters.pth')
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-        valid_loss, cls_acc, f1 = test(valid_iterator, model, device)
-        logger.info('Epoch {}, Valid loss {:.4f}, ClS Acc {:.4f}, F1-score {:.4f}'.format(e, valid_loss, cls_acc, f1))
-
-        score = f1 * cls_acc
-        if score >= best_score:  # save the best model
-            best_score = score
-            torch.save(model.state_dict(), 'model_parameters.pth')
 
 
 if __name__ == '__main__':
@@ -196,4 +197,4 @@ if __name__ == '__main__':
     assert config in CONFIG, 'Given config wrong'
     assert dataset in DATASET, 'Given dataset wrong'
     assert weight > 0, 'Given weight should be larger than zero'
-    main(epoch=5, which_config=config, which_dataset=dataset, multitask_weight=weight, seed=seed)
+    main(epoch=4, which_config=config, which_dataset=dataset, multitask_weight=weight, seed=seed)
