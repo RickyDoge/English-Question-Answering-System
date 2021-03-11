@@ -84,7 +84,7 @@ def test_sketch_reader(valid_iterator, model, device):
     return loss_sum / loss_count, cls_correct_count / cls_total_count
 
 
-def main(epoch=4, which_config='baseline-small', which_dataset='small', multitask_weight=0.5, seed=2020):
+def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=2020):
     torch.random.manual_seed(seed)
     torch.manual_seed(seed)
 
@@ -181,17 +181,12 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', multitas
                 logger.info('E_FV: Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, impossible_loss.item()))
 
                 v_loss_sketch, cls_acc = test_sketch_reader(iter(dataloader_valid), sketch_model, device)
-                v_loss_intensive, f1 = test_intensive_reader(iter(dataloader_valid), intensive_model, device)
-                logger.info(
-                    'Epoch {}, Iteration {}, Sketch valid loss {:.4f}, Intensive valid loss {:4f}, ClS Acc {:.4f}, '
-                    'F1-score {:.4f}'.format(e, i, v_loss_sketch, v_loss_intensive, cls_acc, f1))
-
+                logger.info('Epoch {}, Iteration {}, Sketch valid loss {:.4f}, ClS Acc {:.4f}'
+                            .format(e, i, v_loss_sketch, cls_acc))
                 if cls_acc >= best_acc:  # save the best model
                     best_acc = cls_acc
                     torch.save(sketch_model.state_dict(), 'sketch_model_parameters.pth')
-                if f1 >= best_f1:
-                    best_f1 = f1
-                    torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
+
             optimizer_sketch.zero_grad()
             impossible_loss.backward()
             optimizer_sketch.step()
@@ -206,8 +201,14 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', multitas
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
             span_loss = (start_loss + end_loss) / 2
-            if i % 500 == 0:
+            if i % 1000 == 0:
                 logger.info('I_FV: Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, span_loss.item()))
+                v_loss_intensive, f1 = test_intensive_reader(iter(dataloader_valid), intensive_model, device)
+                logger.info('Epoch {}, Iteration {}, Intensive valid loss {:.4f}, F1-score {:.4f}'
+                            .format(e, i, v_loss_intensive, f1))
+                if f1 >= best_f1:  # save the best model
+                    best_f1 = f1
+                    torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
             optimizer_intensive.zero_grad()
             span_loss.backward()
             optimizer_intensive.step()
@@ -217,14 +218,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', type=str, help='which config')
     parser.add_argument('-d', '--dataset', type=str, help='train on which dataset')
-    parser.add_argument('-w', '--multitask-weight', type=float, default=0.5, help='learn [CLS] and span jointly, given '
-                                                                                  'the loss weight')
     parser.add_argument('-s', '--seed', type=int, default=2020, help='random seed')
     args = parser.parse_args()
 
     config = args.config
     dataset = args.dataset
-    weight = args.multitask_weight
     seed = args.seed
 
     CONFIG = ['cross-attention', 'matching-attention']
@@ -232,5 +230,4 @@ if __name__ == '__main__':
 
     assert config in CONFIG, 'Given config wrong'
     assert dataset in DATASET, 'Given dataset wrong'
-    assert weight > 0, 'Given weight should be larger than zero'
-    main(epoch=4, which_config=config, which_dataset=dataset, multitask_weight=weight, seed=seed)
+    main(epoch=4, which_config=config, which_dataset=dataset, seed=seed)
