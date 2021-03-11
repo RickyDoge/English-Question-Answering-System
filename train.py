@@ -109,9 +109,6 @@ def main(epoch=5, which_config='baseline-small', which_dataset='small', multitas
     model = BaselineModel(clm_model=which_model, hidden_dim=hidden_dim)
     model.train()
 
-    if os.path.isfile('model_parameters.pth'):  # load previous best model
-        model.load_state_dict(torch.load('model_parameters.pth'))
-
     # GPU Config:
     if torch.cuda.device_count() > 1:
         device = torch.cuda.current_device()
@@ -142,6 +139,9 @@ def main(epoch=5, which_config='baseline-small', which_dataset='small', multitas
     start_end_loss = nn.CrossEntropyLoss()
 
     best_score = 0.25  # f1 * cls_acc
+
+    if os.path.isfile('model_parameters.pth'):  # load previous best model
+        model.load_state_dict(torch.load('model_parameters.pth'))
 
     for e in range(epoch):
         train_iterator = iter(dataloader_train)
