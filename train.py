@@ -171,11 +171,6 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
         sketch_model.load_state_dict(torch.load('sketch_model_parameters.pth'))
         intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))
 
-    v_loss_sketch, cls_acc = test_sketch_reader(iter(dataloader_valid), sketch_model, device)
-    v_loss_intensive, f1 = test_intensive_reader(iter(dataloader_valid), intensive_model, device)
-    logger.info('Initial result: Sketch valid loss {:.4f}, Intensive valid loss {:4f}, ClS Acc {:.4f}, F1-score {:.4f}'
-                .format(v_loss_sketch, v_loss_intensive, cls_acc, f1))
-
     for e in range(epoch):
         for i, data in enumerate(iter(dataloader_train)):
             sketch_model.train()
@@ -189,7 +184,6 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
             impossible_loss = cls_loss(cls_out, is_impossibles)
             if i % 1000 == 0:
                 logger.info('E_FV: Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, impossible_loss.item()))
-
                 v_loss_sketch, cls_acc = test_sketch_reader(iter(dataloader_valid), sketch_model, device)
                 logger.info('Epoch {}, Iteration {}, Sketch valid loss {:.4f}, ClS Acc {:.4f}'
                             .format(e, i, v_loss_sketch, cls_acc))
@@ -206,7 +200,7 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
             start_logits, end_logits = intensive_model(batch_encoding['input_ids'].to(device),
                                                        attention_mask=batch_encoding['attention_mask'].to(device),
                                                        token_type_ids=batch_encoding['token_type_ids'].to(device),
-                                                       sep_id=tokenizer.sep_token_id,
+                                                       pad_idx=tokenizer.pad_token_id,
                                                        )
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
