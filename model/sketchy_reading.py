@@ -1,10 +1,16 @@
 import torch
-from model import baseline
+import torch.nn as nn
+import math
+from transformers import ElectraModel
 
 
-class SketchyReadingModel(baseline.BaselineModel):
+class SketchyReadingModel(nn.Module):
     def __init__(self, hidden_dim=256, clm_model='google/electra-small-discriminator'):
-        super(SketchyReadingModel, self).__init__(hidden_dim, clm_model)
+        super(SketchyReadingModel, self).__init__()
+        self.pre_trained_clm = ElectraModel.from_pretrained(clm_model)
+        self.cls_fc_layer = nn.Linear(hidden_dim, 2, bias=True)
+        nn.init.xavier_uniform_(self.cls_fc_layer.weight, gain=1 / math.sqrt(2))
+        nn.init.constant_(self.cls_fc_layer.bias, 0.)
 
     def forward(self, input_ids, attention_mask, token_type_ids):
         # batch_size * seq_length * hidden_dim
