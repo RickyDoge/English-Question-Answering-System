@@ -148,8 +148,22 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
         device = torch.device('cpu')  # CPU
         print("use CPU")
 
-    optimizer_sketch = optim.Adam(sketch_model.parameters(), lr=1e-4, weight_decay=0.01)
-    optimizer_intensive = optim.Adam(intensive_model.parameters(), lr=1e-4, weight_decay=0.01)
+    if torch.cuda.device_count() > 1:
+        optimizer_sketch = optim.Adam([{'params': sketch_model.module.pre_trained_clm.parameters(), 'lr': 1e-4},
+                                       {'params': sketch_model.module.cls_fc_layer.parameters(), 'lr': 5e-4,
+                                        'weight_decay': 0.01},
+                                       {'params': sketch_model.module.span_detect_layer.parameters(), 'lr': 5e-4,
+                                        'weight_decay': 0.01},
+                                       ])
+        optimizer_intensive = optim.Adam(intensive_model.parameters(), lr=1e-4)
+    else:
+        optimizer_sketch = optim.Adam([{'params': sketch_model.pre_trained_clm.parameters(), 'lr': 1e-4},
+                                       {'params': sketch_model.cls_fc_layer.parameters(), 'lr': 5e-4,
+                                        'weight_decay': 0.01},
+                                       {'params': sketch_model.span_detect_layer.parameters(), 'lr': 5e-4,
+                                        'weight_decay': 0.01},
+                                       ])
+        optimizer_intensive = optim.Adam(intensive_model.parameters(), lr=1e-4)
 
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
     start_end_loss = nn.CrossEntropyLoss()

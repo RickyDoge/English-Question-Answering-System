@@ -124,15 +124,15 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', multitas
         print("use CPU")
 
     if torch.cuda.device_count() > 1:
-        optimizer = optim.Adam([{'params': model.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'weight_decay': 0.01},
-                                {'params': model.module.cls_fc_layer.parameters(), 'lr': 1e-4, 'weight_decay': 0.01},
-                                {'params': model.module.span_detect_layer.parameters(), 'lr': 1e-4,
+        optimizer = optim.Adam([{'params': model.module.pre_trained_clm.parameters(), 'lr': 1e-4},
+                                {'params': model.module.cls_fc_layer.parameters(), 'lr': 5e-4, 'weight_decay': 0.01},
+                                {'params': model.module.span_detect_layer.parameters(), 'lr': 5e-4,
                                  'weight_decay': 0.01},
                                 ])
     else:
-        optimizer = optim.Adam([{'params': model.pre_trained_clm.parameters(), 'lr': 1e-4, 'weight_decay': 0.01},
-                                {'params': model.cls_fc_layer.parameters(), 'lr': 1e-4, 'weight_decay': 0.01},
-                                {'params': model.span_detect_layer.parameters(), 'lr': 1e-4, 'weight_decay': 0.01},
+        optimizer = optim.Adam([{'params': model.pre_trained_clm.parameters(), 'lr': 1e-4},
+                                {'params': model.cls_fc_layer.parameters(), 'lr': 5e-4, 'weight_decay': 0.01},
+                                {'params': model.span_detect_layer.parameters(), 'lr': 5e-4, 'weight_decay': 0.01},
                                 ])
 
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
