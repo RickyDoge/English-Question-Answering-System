@@ -30,8 +30,8 @@ def test_intensive_reader(valid_iterator, model, device, pad_idx):
             batch_encoding, _, start_position, end_position, _ = data
             start_position = utils.move_to_device(start_position, device)
             end_position = utils.move_to_device(end_position, device)
-            start_position = torch.where(start_position > 1, start_position - 1, 0)
-            end_position = torch.where(end_position > 1, end_position - 1, 0)
+            start_position = torch.where(start_position >= 1, start_position - 1, start_position)
+            end_position = torch.where(end_position >= 1, end_position - 1, end_position)
             start_logits, end_logits = model(batch_encoding['input_ids'].to(device),
                                              attention_mask=batch_encoding['attention_mask'].to(device),
                                              token_type_ids=batch_encoding['token_type_ids'].to(device),
