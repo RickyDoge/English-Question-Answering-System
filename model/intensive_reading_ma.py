@@ -23,10 +23,9 @@ class IntensiveReadingWithMatchAttention(nn.Module):
         H = self.pre_trained_clm(input_ids, attention_mask, token_type_ids).last_hidden_state
         question_hidden, _, question_pad_mask, _ = \
             utils.generate_question_and_passage_hidden(H, attention_mask, token_type_ids, pad_idx)
-        question_hidden.to(H.device)
-        question_pad_mask.to(H.device)
-        
-        question_hidden = question_hidden.masked_fill(question_pad_mask.unsqueeze(dim=-1), value=torch.tensor(-1e9))
+        question_hidden = question_hidden.to(H.device)
+        question_pad_mask = question_pad_mask.to(H.device)
+        question_hidden.masked_fill_(question_pad_mask.unsqueeze(dim=-1), value=float(-1e9))
 
         Hq = self.Hq_proj(question_hidden)
         # H: [batch_size * context_length * hidden_dim], Hq: [batch_size * question_length * hidden_dim]
