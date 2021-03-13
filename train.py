@@ -201,6 +201,11 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
     best_f1 = 0.5
     best_acc = 0.5
 
+    v_loss_intensive, f1 = test_intensive_reader(iter(dataloader_valid), intensive_model, device,
+                                                 pad_idx=tokenizer.pad_token_id)
+    logger.info('Epoch {}, Iteration {}, Intensive valid loss {:.4f}, F1-score {:.4f}'
+                .format(-1, -1, v_loss_intensive, f1))
+
     if os.path.isfile('model_parameters.pth'):  # load previous best model
         sketch_model.load_state_dict(torch.load('sketch_model_parameters.pth'))
         intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))

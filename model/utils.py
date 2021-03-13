@@ -78,7 +78,9 @@ def calculate_recall(ps, pe, rs, re):
         return 0.
     case1 = abs(re - ps)
     case2 = abs(pe - rs)
-    overlap = min(case1, case2)
+    case3 = abs(pe - ps)
+    case4 = abs(re - rs)
+    overlap = min(case1, case2, case3, case4)
     overall = pe - ps
     if overall == 0:
         return 1.
