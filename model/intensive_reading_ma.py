@@ -34,11 +34,11 @@ class IntensiveReadingWithMatchAttention(nn.Module):
         Hpri = torch.bmm(M, Hq)
 
         # [batch_size * context_length * 2]
-        span_output = self.span_detect_layer(Hpri).transpose(0, 1)
+        span_output = self.span_detect_layer(Hpri)
 
         start_logits, end_logits = span_output.split(1, dim=-1)
 
-        # [context_length * batch_size]
+        # [batch_size * context_length]
         start_logits = start_logits.squeeze(dim=-1)
         end_logits = end_logits.squeeze(dim=-1)
         return start_logits, end_logits

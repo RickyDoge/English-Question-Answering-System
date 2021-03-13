@@ -15,7 +15,7 @@ from model.dataset import my_collate_fn, QuestionAnsweringDatasetConfiguration, 
 from functools import partial
 
 
-def test_intensive_reader(valid_iterator, model, device):
+def test_intensive_reader(valid_iterator, model, device, pad_idx):
     model.eval()
     start_end_loss = nn.CrossEntropyLoss()
 
@@ -30,13 +30,19 @@ def test_intensive_reader(valid_iterator, model, device):
             batch_encoding, _, start_position, end_position, _ = data
             start_position = utils.move_to_device(start_position, device)
             end_position = utils.move_to_device(end_position, device)
+            start_position = torch.where(start_position > 1, start_position - 1, 0)
+            end_position = torch.where(end_position > 1, end_position - 1, 0)
             start_logits, end_logits = model(batch_encoding['input_ids'].to(device),
                                              attention_mask=batch_encoding['attention_mask'].to(device),
                                              token_type_ids=batch_encoding['token_type_ids'].to(device),
+                                             pad_idx=pad_idx,
                                              )
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
-            loss_sum += (start_loss.item() + end_loss.item()) / 2
+
+            span_loss = (start_loss + end_loss) / 2
+
+            loss_sum += span_loss.item()
             loss_count += 1
 
             predict_start = torch.argmax(start_logits, dim=-1)
@@ -99,7 +105,7 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
     logger.addHandler(handler)
 
     # load configuration
-    if which_config == 'cross-attention' or 'matching-attention':
+    if which_config == 'cross-attention' or 'match-attention':
         hidden_dim = 256
         which_model = 'google/electra-small-discriminator'
     else:
@@ -161,7 +167,7 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
               'weight_decay': 0.01},
              {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 3e-4,
               'weight_decay': 0.01},
-             ] if config == 'matching-attention' else
+             ] if config == 'match-attention' else
             [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
              {'params': intensive_model.module.attention.parameters(), 'lr': 3e-4,
               'weight_decay': 0.01},
@@ -180,7 +186,7 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
               'weight_decay': 0.01},
              {'params': intensive_model.span_detect_layer.parameters(), 'lr': 3e-4,
               'weight_decay': 0.01},
-             ] if config == 'matching-attention' else
+             ] if config == 'match-attention' else
             [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
              {'params': intensive_model.attention.parameters(), 'lr': 3e-4,
               'weight_decay': 0.01},
@@ -210,6 +216,9 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
                                    token_type_ids=batch_encoding['token_type_ids'].to(device),
                                    )
             impossible_loss = cls_loss(cls_out, is_impossibles)
+            optimizer_sketch.zero_grad()
+            impossible_loss.backward()
+            optimizer_sketch.step()
             if i % 1000 == 0:
                 logger.info('E_FV: Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, impossible_loss.item()))
                 v_loss_sketch, cls_acc = test_sketch_reader(iter(dataloader_valid), sketch_model, device)
@@ -219,12 +228,10 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
                     best_acc = cls_acc
                     torch.save(sketch_model.state_dict(), 'sketch_model_parameters.pth')
 
-            optimizer_sketch.zero_grad()
-            impossible_loss.backward()
-            optimizer_sketch.step()
-
             start_position = utils.move_to_device(start_position, device)
             end_position = utils.move_to_device(end_position, device)
+            start_position = torch.where(start_position > 1, start_position - 1, 0)
+            end_position = torch.where(end_position > 1, end_position - 1, 0)  # minus one, because we removed [CLS]
             start_logits, end_logits = intensive_model(batch_encoding['input_ids'].to(device),
                                                        attention_mask=batch_encoding['attention_mask'].to(device),
                                                        token_type_ids=batch_encoding['token_type_ids'].to(device),
@@ -233,17 +240,18 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
             span_loss = (start_loss + end_loss) / 2
+            optimizer_intensive.zero_grad()
+            span_loss.backward()
+            optimizer_intensive.step()
             if i % 1000 == 0:
                 logger.info('I_FV: Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, span_loss.item()))
-                v_loss_intensive, f1 = test_intensive_reader(iter(dataloader_valid), intensive_model, device)
+                v_loss_intensive, f1 = test_intensive_reader(iter(dataloader_valid), intensive_model, device,
+                                                             pad_idx=tokenizer.pad_token_id)
                 logger.info('Epoch {}, Iteration {}, Intensive valid loss {:.4f}, F1-score {:.4f}'
                             .format(e, i, v_loss_intensive, f1))
                 if f1 >= best_f1:  # save the best model
                     best_f1 = f1
                     torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
-            optimizer_intensive.zero_grad()
-            span_loss.backward()
-            optimizer_intensive.step()
 
 
 if __name__ == '__main__':
@@ -257,7 +265,7 @@ if __name__ == '__main__':
     dataset = args.dataset
     seed = args.seed
 
-    CONFIG = ['cross-attention', 'matching-attention']
+    CONFIG = ['cross-attention', 'match-attention']
     DATASET = ['small', 'normal']
 
     assert config in CONFIG, 'Given config wrong'
