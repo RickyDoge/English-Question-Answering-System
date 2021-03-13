@@ -1,5 +1,6 @@
 import torch
 import torch.nn.utils.rnn as rnn
+import torch.nn.functional as F
 
 
 def move_to_device(data_structure, device):
@@ -23,7 +24,7 @@ def find_idx_of_token(batch_encoding, token_id):
     return torch.tensor(token_id).long()
 
 
-def generate_question_and_passage_hidden(last_hidden, attention_mask, token_type_ids, pad_idx):
+def generate_question_and_passage_hidden(last_hidden, attention_mask, token_type_ids, pad_idx, qus_len, con_len):
     max_length = last_hidden.size(1)
 
     sep_token_position = []
@@ -59,9 +60,13 @@ def generate_question_and_passage_hidden(last_hidden, attention_mask, token_type
 
     question_hidden = rnn.pad_sequence(question_hidden, batch_first=True, padding_value=pad_idx)
     passage_hidden = rnn.pad_sequence(passage_hidden, batch_first=True, padding_value=pad_idx)
+    question_hidden = F.pad(question_hidden, (0, qus_len - question_hidden.size(1), 0, 0), value=pad_idx)
+    passage_hidden = F.pad(passage_hidden, (0, con_len - passage_hidden.size(1), 0, 0), value=pad_idx)
 
-    passage_pad_mask = length_to_mask(passage_length)
     question_pad_mask = length_to_mask(question_length)
+    passage_pad_mask = length_to_mask(passage_length)
+    question_pad_mask = F.pad(question_pad_mask, (0, qus_len - question_pad_mask.size(1)), value=True)
+    passage_pad_mask = F.pad(passage_pad_mask, (0, con_len - passage_pad_mask.size(1)), value=True)
 
     return question_hidden, passage_hidden, question_pad_mask, passage_pad_mask
 
@@ -71,6 +76,34 @@ def length_to_mask(length):  # length should be one dimensional
     max_len = length.max().item()
     mask = torch.arange(max_len).expand(len(length), max_len) > length.unsqueeze(1)
     return mask
+
+
+def find_max_qus_con_length(attention_mask, token_type_ids, max_length=512):
+    sep_token_position = []
+    for batch_token_type_ids in token_type_ids:  # a batch of token_type_ids
+        batch_sep_token_position = 0
+        for i, token_type in enumerate(batch_token_type_ids):  # each token in a batch (sentence)
+            if token_type.item() == 1:  # find the index of the first [SEP] token
+                batch_sep_token_position = i - 1
+                break
+        sep_token_position.append(batch_sep_token_position)
+
+    pad_token_position = []
+    for batch_token_type_ids in attention_mask:  # a batch of attention mask
+        batch_pad_token_position = 0
+        for i, token_type in enumerate(batch_token_type_ids):  # each token in a batch (sentence)
+            if token_type.item() == 0:  # find the index of the first [PAD] token
+                batch_pad_token_position = i - 1
+                break
+        if batch_pad_token_position == 0:
+            batch_pad_token_position = max_length
+        pad_token_position.append(batch_pad_token_position)
+
+    max_context_length = torch.max(torch.tensor(sep_token_position))
+    max_question_length = torch.tensor(pad_token_position) - torch.tensor(sep_token_position)
+    max_question_length = torch.max(max_question_length)
+
+    return max_context_length.item() - 1, max_question_length.item() - 1
 
 
 def calculate_recall(ps, pe, rs, re):

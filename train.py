@@ -32,10 +32,16 @@ def test_intensive_reader(valid_iterator, model, device, pad_idx):
             end_position = utils.move_to_device(end_position, device)
             start_position = torch.where(start_position >= 1, start_position - 1, start_position)
             end_position = torch.where(end_position >= 1, end_position - 1, end_position)
+            max_con_len, max_qus_len = utils.find_max_qus_con_length(attention_mask=batch_encoding['attention_mask'],
+                                                                     token_type_ids=batch_encoding['token_type_ids'],
+                                                                     max_length=batch_encoding['input_ids'].size(1),
+                                                                     )
             start_logits, end_logits = model(batch_encoding['input_ids'].to(device),
                                              attention_mask=batch_encoding['attention_mask'].to(device),
                                              token_type_ids=batch_encoding['token_type_ids'].to(device),
                                              pad_idx=pad_idx,
+                                             max_qus_length=max_qus_len,
+                                             max_con_length=max_con_len,
                                              )
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
@@ -237,10 +243,17 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
             end_position = utils.move_to_device(end_position, device)
             start_position = torch.where(start_position > 1, start_position - 1, 0)
             end_position = torch.where(end_position > 1, end_position - 1, 0)  # minus one, because we removed [CLS]
+
+            max_con_len, max_qus_len = utils.find_max_qus_con_length(attention_mask=batch_encoding['attention_mask'],
+                                                                     token_type_ids=batch_encoding['token_type_ids'],
+                                                                     max_length=batch_encoding['input_ids'].size(1),
+                                                                     )
             start_logits, end_logits = intensive_model(batch_encoding['input_ids'].to(device),
                                                        attention_mask=batch_encoding['attention_mask'].to(device),
                                                        token_type_ids=batch_encoding['token_type_ids'].to(device),
                                                        pad_idx=tokenizer.pad_token_id,
+                                                       max_qus_length=max_qus_len,
+                                                       max_con_length=max_con_len,
                                                        )
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)

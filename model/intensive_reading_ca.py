@@ -13,13 +13,14 @@ class IntensiveReadingWithCrossAttention(nn.Module):
         nn.init.xavier_uniform_(self.span_detect_layer.weight, gain=1 / math.sqrt(2))
         nn.init.constant_(self.span_detect_layer.bias, 0.)
 
-    def forward(self, input_ids, attention_mask, token_type_ids, pad_idx):
+    def forward(self, input_ids, attention_mask, token_type_ids, pad_idx, max_qus_length, max_con_length):
         # [batch_size * seq_length * hidden_dim]
         last_hidden_state = self.pre_trained_clm(input_ids, attention_mask, token_type_ids).last_hidden_state
         # question_hidden, passage_hidden: [batch_size * question/passage length * hidden_dim]
         # question_pad_mask, passage_pad_mask: [batch_size * question/passage length]
         question_hidden, passage_hidden, question_pad_mask, _ = \
-            utils.generate_question_and_passage_hidden(last_hidden_state, attention_mask, token_type_ids, pad_idx)
+            utils.generate_question_and_passage_hidden(last_hidden_state, attention_mask, token_type_ids, pad_idx,
+                                                       max_qus_length, max_con_length)
         question_hidden = question_hidden.transpose(0, 1).to(last_hidden_state.device)
         passage_hidden = passage_hidden.transpose(0, 1).to(last_hidden_state.device)
         question_pad_mask = question_pad_mask.to(last_hidden_state.device)

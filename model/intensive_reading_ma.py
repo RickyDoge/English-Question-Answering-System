@@ -17,12 +17,12 @@ class IntensiveReadingWithMatchAttention(nn.Module):
         nn.init.constant_(self.Hq_proj.bias, 0.)
         nn.init.constant_(self.span_detect_layer.bias, 0.)
 
-
-    def forward(self, input_ids, attention_mask, token_type_ids, pad_idx):
+    def forward(self, input_ids, attention_mask, token_type_ids, pad_idx, max_qus_length, max_con_length):
         # batch_size * seq_length * hidden_dim
         H = self.pre_trained_clm(input_ids, attention_mask, token_type_ids).last_hidden_state
         question_hidden, _, question_pad_mask, _ = \
-            utils.generate_question_and_passage_hidden(H, attention_mask, token_type_ids, pad_idx)
+            utils.generate_question_and_passage_hidden(H, attention_mask, token_type_ids, pad_idx, max_qus_length,
+                                                       max_con_length)
         question_hidden = question_hidden.to(H.device)
         question_pad_mask = question_pad_mask.to(H.device)
         question_hidden.masked_fill_(question_pad_mask.unsqueeze(dim=-1), value=float(-1e9))
