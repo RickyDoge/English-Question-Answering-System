@@ -20,23 +20,24 @@ class IntensiveReadingWithMatchAttention(nn.Module):
     def forward(self, input_ids, attention_mask, token_type_ids, pad_idx, max_qus_length, max_con_length):
         # batch_size * seq_length * hidden_dim
         H = self.pre_trained_clm(input_ids, attention_mask, token_type_ids).last_hidden_state
-        question_hidden, _, question_pad_mask, _ = \
+        question_hidden, passage_hidden, question_pad_mask, _ = \
             utils.generate_question_and_passage_hidden(H, attention_mask, token_type_ids, pad_idx, max_qus_length,
                                                        max_con_length)
         question_hidden = question_hidden.to(H.device)
+        passage_hidden = passage_hidden.to(H.device)
         question_pad_mask = question_pad_mask.to(H.device)
         question_hidden.masked_fill_(question_pad_mask.unsqueeze(dim=-1), value=float(-1e9))
 
         Hq = self.Hq_proj(question_hidden)
-        # H: [batch_size * context_length * hidden_dim], Hq: [batch_size * question_length * hidden_dim]
-        attn_scores = torch.bmm(H, Hq.transpose(1, 2))  # attn_scores: [batch_size * context_length * question_length]
+        # passage_hidden(Hp): [batch_size * context_length * hidden_dim], Hq: [batch_size * question_length * hidden_dim]
+        attn_scores = torch.bmm(passage_hidden, Hq.transpose(1, 2))  # attn_scores: [batch_size * context_length * question_length]
         M = F.softmax(attn_scores, dim=-1)
         # M: [batch_size * context_length * question_length], Hq: [batch_size * question_length * hidden_dim]
-        # Hpri: [batch_size * context_length * hidden_dim]
-        Hpri = torch.bmm(M, Hq)
+        # Hp_pri: [batch_size * context_length * hidden_dim]
+        Hp_pri = torch.bmm(M, Hq)
 
         # [batch_size * context_length * 2]
-        span_output = self.span_detect_layer(Hpri)
+        span_output = self.span_detect_layer(Hp_pri)
 
         start_logits, end_logits = span_output.split(1, dim=-1)
 

@@ -202,7 +202,7 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
         )
 
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
-    start_end_loss = nn.CrossEntropyLoss()
+    start_end_loss = nn.CrossEntropyLoss()  # type: object
 
     best_f1 = 0.5
     best_acc = 0.5
