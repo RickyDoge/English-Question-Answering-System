@@ -130,6 +130,7 @@ dmypy.json
 runs/
 exec/
 *.pyc
+*.pth
 *.cypthon-37.pyc
 .DS_Store
 *.ipynb
