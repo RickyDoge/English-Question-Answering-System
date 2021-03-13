@@ -10,6 +10,7 @@ from transformers import ElectraTokenizerFast
 from model import utils
 from model.sketchy_reading import SketchyReadingModel
 from model.intensive_reading_ca import IntensiveReadingWithCrossAttention
+from model.intensive_reading_ma import IntensiveReadingWithMatchAttention
 from model.dataset import my_collate_fn, QuestionAnsweringDatasetConfiguration, QuestionAnsweringDataset
 from functools import partial
 
@@ -127,7 +128,7 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
     if which_config == 'cross-attention':
         intensive_model = IntensiveReadingWithCrossAttention(clm_model=which_model, hidden_dim=hidden_dim)
     else:
-        return 0  # 改成IntensiveReadingWithMatchingAttention
+        intensive_model = IntensiveReadingWithMatchAttention(clm_model=which_model, hidden_dim=hidden_dim)
     sketch_model.train()
     intensive_model.train()
 
@@ -149,17 +150,44 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
         print("use CPU")
 
     if torch.cuda.device_count() > 1:
-        optimizer_sketch = optim.Adam([{'params': sketch_model.module.pre_trained_clm.parameters(), 'lr': 1e-4},
-                                       {'params': sketch_model.module.cls_fc_layer.parameters(), 'lr': 5e-4,
-                                        'weight_decay': 0.01},
-                                       ])
-        optimizer_intensive = optim.Adam(intensive_model.parameters(), lr=1e-4)
+        optimizer_sketch = optim.Adam(
+            [{'params': sketch_model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+             {'params': sketch_model.module.cls_fc_layer.parameters(), 'lr': 5e-4,
+              'weight_decay': 0.01},
+             ])
+        optimizer_intensive = optim.Adam(
+            [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+             {'params': intensive_model.module.Hq_proj.parameters(), 'lr': 3e-4,
+              'weight_decay': 0.01},
+             {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 3e-4,
+              'weight_decay': 0.01},
+             ] if config == 'matching-attention' else
+            [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+             {'params': intensive_model.module.attention.parameters(), 'lr': 3e-4,
+              'weight_decay': 0.01},
+             {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 3e-4,
+              'weight_decay': 0.01},
+             ]
+        )
     else:
-        optimizer_sketch = optim.Adam([{'params': sketch_model.pre_trained_clm.parameters(), 'lr': 1e-4},
-                                       {'params': sketch_model.cls_fc_layer.parameters(), 'lr': 5e-4,
+        optimizer_sketch = optim.Adam([{'params': sketch_model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+                                       {'params': sketch_model.cls_fc_layer.parameters(), 'lr': 3e-4,
                                         'weight_decay': 0.01},
                                        ])
-        optimizer_intensive = optim.Adam(intensive_model.parameters(), lr=1e-4)
+        optimizer_intensive = optim.Adam(
+            [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+             {'params': intensive_model.Hq_proj.parameters(), 'lr': 3e-4,
+              'weight_decay': 0.01},
+             {'params': intensive_model.span_detect_layer.parameters(), 'lr': 3e-4,
+              'weight_decay': 0.01},
+             ] if config == 'matching-attention' else
+            [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+             {'params': intensive_model.attention.parameters(), 'lr': 3e-4,
+              'weight_decay': 0.01},
+             {'params': intensive_model.span_detect_layer.parameters(), 'lr': 3e-4,
+              'weight_decay': 0.01},
+             ]
+        )
 
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
     start_end_loss = nn.CrossEntropyLoss()
