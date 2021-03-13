@@ -53,9 +53,9 @@ def generate_question_and_passage_hidden(last_hidden, attention_mask, token_type
 
     for i, sentence in enumerate(last_hidden):
         passage_hidden.append(sentence[1:sep_token_position[i], :])
-        passage_length.append(sep_token_position[i] - 1)
+        passage_length.append(sep_token_position[i] - 2)
         question_hidden.append(sentence[sep_token_position[i] + 1:pad_token_position[i], :])
-        question_length.append(pad_token_position[i] - sep_token_position[i] - 1)
+        question_length.append(pad_token_position[i] - sep_token_position[i] - 2)
 
     question_hidden = rnn.pad_sequence(question_hidden, batch_first=True, padding_value=pad_idx)
     passage_hidden = rnn.pad_sequence(passage_hidden, batch_first=True, padding_value=pad_idx)
