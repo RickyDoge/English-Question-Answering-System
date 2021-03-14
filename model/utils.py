@@ -60,8 +60,8 @@ def generate_question_and_passage_hidden(last_hidden, attention_mask, token_type
 
     question_hidden = rnn.pad_sequence(question_hidden, batch_first=True, padding_value=pad_idx)
     passage_hidden = rnn.pad_sequence(passage_hidden, batch_first=True, padding_value=pad_idx)
-    question_hidden = F.pad(question_hidden, (0, qus_len - question_hidden.size(1), 0, 0), value=pad_idx)
-    passage_hidden = F.pad(passage_hidden, (0, con_len - passage_hidden.size(1), 0, 0), value=pad_idx)
+    question_hidden = F.pad(question_hidden, (0, 0, 0, qus_len - question_hidden.size(1)), value=pad_idx)
+    passage_hidden = F.pad(passage_hidden, (0, 0, 0, con_len - passage_hidden.size(1)), value=pad_idx)
 
     question_pad_mask = length_to_mask(question_length)
     passage_pad_mask = length_to_mask(passage_length)
