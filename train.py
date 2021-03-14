@@ -212,8 +212,10 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
     logger.info('Epoch {}, Iteration {}, Intensive valid loss {:.4f}, F1-score {:.4f}'
                 .format(-1, -1, v_loss_intensive, f1))
 
-    if os.path.isfile('model_parameters.pth'):  # load previous best model
+    if os.path.isfile('sketch_model_parameters.pth'):  # load previous best model
         sketch_model.load_state_dict(torch.load('sketch_model_parameters.pth'))
+
+    if os.path.isfile('intensive_model_parameters.pth'):
         intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))
 
     for e in range(epoch):
