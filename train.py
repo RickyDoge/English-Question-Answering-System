@@ -64,6 +64,7 @@ def test_intensive_reader(valid_iterator, model, device, pad_idx):
                 f1_sum += (recall + precision) / 2
                 f1_count += 1
 
+    model.train()
     return loss_sum / loss_count, f1_sum / f1_count
 
 
@@ -94,6 +95,7 @@ def test_sketch_reader(valid_iterator, model, device):
             cls_correct_count += torch.sum(cls_out).item()
             cls_total_count += cls_out.size(0)
 
+    model.train()
     return loss_sum / loss_count, cls_correct_count / cls_total_count
 
 
@@ -201,8 +203,8 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
              ]
         )
 
-    cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
-    start_end_loss = nn.CrossEntropyLoss()  # type: object
+    cls_loss = nn.BCELoss(reduction='sum')  # Binary Cross Entropy Loss
+    start_end_loss = nn.CrossEntropyLoss()
 
     best_f1 = 0.5
     best_acc = 0.5
