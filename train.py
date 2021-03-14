@@ -91,7 +91,7 @@ def test_sketch_reader(valid_iterator, model, device):
 
             cls_out = torch.argmax(cls_out, dim=-1)
             cls_out = (cls_out == is_impossibles.argmax(dim=-1)).float()
-            cls_correct_count += torch.sum(cls_out)
+            cls_correct_count += torch.sum(cls_out).item()
             cls_total_count += cls_out.size(0)
 
     return loss_sum / loss_count, cls_correct_count / cls_total_count
@@ -164,7 +164,7 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
     if torch.cuda.device_count() > 1:
         optimizer_sketch = optim.Adam(
             [{'params': sketch_model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
-             {'params': sketch_model.module.cls_fc_layer.parameters(), 'lr': 5e-4,
+             {'params': sketch_model.module.cls_fc_layer.parameters(), 'lr': 1e-3,
               'weight_decay': 0.01},
              ])
         optimizer_intensive = optim.Adam(
@@ -183,7 +183,7 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
         )
     else:
         optimizer_sketch = optim.Adam([{'params': sketch_model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
-                                       {'params': sketch_model.cls_fc_layer.parameters(), 'lr': 3e-4,
+                                       {'params': sketch_model.cls_fc_layer.parameters(), 'lr': 1e-3,
                                         'weight_decay': 0.01},
                                        ])
         optimizer_intensive = optim.Adam(
@@ -207,21 +207,17 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
     best_f1 = 0.5
     best_acc = 0.5
 
-    v_loss_intensive, f1 = test_intensive_reader(iter(dataloader_valid), intensive_model, device,
-                                                 pad_idx=tokenizer.pad_token_id)
-    logger.info('Epoch {}, Iteration {}, Intensive valid loss {:.4f}, F1-score {:.4f}'
-                .format(-1, -1, v_loss_intensive, f1))
-
     if os.path.isfile('sketch_model_parameters.pth'):  # load previous best model
         sketch_model.load_state_dict(torch.load('sketch_model_parameters.pth'))
-
+    print('a')
     if os.path.isfile('intensive_model_parameters.pth'):
         intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))
-
+    v_loss_sketch, cls_acc = test_sketch_reader(iter(dataloader_valid), sketch_model, device)
+    logger.info('E_FV: Epoch {}, Iteration {}, Sketch valid loss {:.4f}, ClS Acc {:.4f}'
+                .format(-1, -1, v_loss_sketch, cls_acc))
     for e in range(epoch):
         for i, data in enumerate(iter(dataloader_train)):
             sketch_model.train()
-            intensive_model.train()
             batch_encoding, is_impossibles, start_position, end_position, _ = data
             is_impossibles = utils.move_to_device(is_impossibles, device)
             cls_out = sketch_model(batch_encoding['input_ids'].to(device),
@@ -235,12 +231,13 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
             if i % 1000 == 0:
                 logger.info('E_FV: Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, impossible_loss.item()))
                 v_loss_sketch, cls_acc = test_sketch_reader(iter(dataloader_valid), sketch_model, device)
-                logger.info('Epoch {}, Iteration {}, Sketch valid loss {:.4f}, ClS Acc {:.4f}'
+                logger.info('E_FV: Epoch {}, Iteration {}, Sketch valid loss {:.4f}, ClS Acc {:.4f}'
                             .format(e, i, v_loss_sketch, cls_acc))
                 if cls_acc >= best_acc:  # save the best model
                     best_acc = cls_acc
                     torch.save(sketch_model.state_dict(), 'sketch_model_parameters.pth')
 
+            intensive_model.train()
             start_position = utils.move_to_device(start_position, device)
             end_position = utils.move_to_device(end_position, device)
             # minus one, because we removed [CLS]
@@ -268,7 +265,7 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
                 logger.info('I_FV: Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, span_loss.item()))
                 v_loss_intensive, f1 = test_intensive_reader(iter(dataloader_valid), intensive_model, device,
                                                              pad_idx=tokenizer.pad_token_id)
-                logger.info('Epoch {}, Iteration {}, Intensive valid loss {:.4f}, F1-score {:.4f}'
+                logger.info('I_FV: Epoch {}, Iteration {}, Intensive valid loss {:.4f}, F1-score {:.4f}'
                             .format(e, i, v_loss_intensive, f1))
                 if f1 >= best_f1:  # save the best model
                     best_f1 = f1
