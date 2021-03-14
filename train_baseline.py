@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.data as tud
 import torch.optim as optim
 import os
 import logging
 import argparse
+from evaluate.evaluate import test_multi_task_learner
 from transformers import ElectraTokenizerFast
 from model import utils
 from model.baseline import BaselineModel
@@ -100,9 +100,9 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', multitas
         config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=48, shuffle=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=48, shuffle=True, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=48, shuffle=False,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=48, shuffle=False, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
     # load pre-trained model
@@ -175,6 +175,9 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', multitas
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+    model.load_state_dict(torch.load('model_parameters.pth'))
+    test_multi_task_learner(iter(dataloader_valid), model, device, tokenizer)
 
 
 if __name__ == '__main__':

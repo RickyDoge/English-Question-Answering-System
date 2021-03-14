@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.data as tud
 import torch.optim as optim
 import os
 import logging
 import argparse
+from evaluate.evaluate import test_retro_reader_learner
 from transformers import ElectraTokenizerFast
 from model import utils
 from model.sketchy_reading import SketchyReadingModel
@@ -130,9 +130,9 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
         config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=48, shuffle=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=48, shuffle=True, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=48, shuffle=False,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=48, shuffle=False, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
     # load pre-trained model
@@ -270,6 +270,10 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
                 if f1 >= best_f1:  # save the best model
                     best_f1 = f1
                     torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
+
+    sketch_model.load_state_dict(torch.load('sketch_model_parameters.pth'))
+    intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))
+    test_retro_reader_learner(iter(dataloader_valid), sketch_model, intensive_model, device, tokenizer)
 
 
 if __name__ == '__main__':

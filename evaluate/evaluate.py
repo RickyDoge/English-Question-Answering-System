@@ -1,6 +1,7 @@
 import torch
 import json
 import os
+from model import utils
 
 
 def test_multi_task_learner(valid_iterator, model, device, tokenizer):
@@ -29,4 +30,35 @@ def test_multi_task_learner(valid_iterator, model, device, tokenizer):
 
 
 def test_retro_reader_learner(valid_iterator, sketch_model, intensive_model, device, tokenizer):
-    pass
+    question_answer_dict = dict()
+    sketch_model.eval()
+    with torch.no_grad():
+        for data in valid_iterator:
+            batch_encoding, _, _, _, question_id = data
+            cls_out = sketch_model(batch_encoding['input_ids'].to(device),
+                                   attention_mask=batch_encoding['attention_mask'].to(device),
+                                   token_type_ids=batch_encoding['token_type_ids'].to(device),
+                                   )
+            cls_out = torch.argmax(cls_out, dim=-1)  # batch_size
+            for i, cls in enumerate(cls_out):
+                if cls.item() == 0:  # answerable
+                    max_con_len, max_qus_len = utils.find_max_qus_con_length(
+                        attention_mask=batch_encoding['attention_mask'],
+                        token_type_ids=batch_encoding['token_type_ids'],
+                        max_length=batch_encoding['input_ids'].size(1),
+                    )
+                    start_logits, end_logits = intensive_model(batch_encoding['input_ids'].to(device),
+                                                               batch_encoding['attention_mask'].to(device),
+                                                               batch_encoding['token_type_ids'].to(device),
+                                                               pad_idx=tokenizer.pad_idx,
+                                                               max_qus_length=max_qus_len,
+                                                               max_con_length=max_con_len,
+                                                               )
+                    start = start_logits[i].item()
+                    end = end_logits[i].item()
+                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start: end + 1])
+                    question_answer_dict[question_id[i]] = answer
+                else:
+                    question_answer_dict[question_id[i]] = ''
+    with open(os.path.join(os.path.curdir, 'eval.json'), 'w') as file:
+        json.dump(question_answer_dict, file)
