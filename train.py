@@ -243,8 +243,9 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
 
             start_position = utils.move_to_device(start_position, device)
             end_position = utils.move_to_device(end_position, device)
-            start_position = torch.where(start_position > 1, start_position - 1, 0)
-            end_position = torch.where(end_position > 1, end_position - 1, 0)  # minus one, because we removed [CLS]
+            # minus one, because we removed [CLS]
+            start_position = torch.where(start_position > 1, start_position - 1, start_position)
+            end_position = torch.where(end_position > 1, end_position - 1, end_position)
 
             max_con_len, max_qus_len = utils.find_max_qus_con_length(attention_mask=batch_encoding['attention_mask'],
                                                                      token_type_ids=batch_encoding['token_type_ids'],
