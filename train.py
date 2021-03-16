@@ -106,9 +106,9 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
         config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=8, shuffle=True, drop_last=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=48, shuffle=True, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=8, shuffle=False, drop_last=True,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=48, shuffle=False, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
     # load pre-trained model
@@ -194,7 +194,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if i % 500 == 0:
+            if i % 1000 == 0:
                 logger.info('Epoch {}, Iteration {}, Span Loss: {:.4f}, Ans Loss {:.4f}'.format(e, i, printable[0],
                                                                                                printable[1]))
                 v_loss_intensive, acc, f1 = test(iter(dataloader_valid), intensive_model, device, tokenizer)
