@@ -5,10 +5,10 @@ import torch.optim as optim
 import os
 import logging
 import argparse
-from evaluate.evaluate import test_retro_reader_learner
+from train_baseline import test
+from evaluate.evaluate import test_multi_task_learner
 from transformers import ElectraTokenizerFast
 from model import utils
-from model.sketchy_reading import SketchyReadingModel
 from model.intensive_reading_ca import IntensiveReadingWithCrossAttention
 from model.intensive_reading_ma import IntensiveReadingWithMatchAttention
 from model.dataset import my_collate_fn, QuestionAnsweringDatasetConfiguration, QuestionAnsweringDataset
@@ -99,7 +99,7 @@ def test_sketch_reader(valid_iterator, model, device):
     return loss_sum / loss_count, cls_correct_count / cls_total_count
 
 
-def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=2020):
+def main(epoch=4, which_config='cross-attention', which_dataset='small', multitask_weight=1.0, seed=2020):
     torch.random.manual_seed(seed)
     torch.manual_seed(seed)
 
@@ -113,11 +113,8 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
     logger.addHandler(handler)
 
     # load configuration
-    if which_config == 'cross-attention' or 'match-attention':
-        hidden_dim = 256
-        which_model = 'google/electra-small-discriminator'
-    else:
-        raise Exception('Input config wrong.')
+    hidden_dim = 256
+    which_model = 'google/electra-small-discriminator'
 
     # load dataset
     tokenizer = ElectraTokenizerFast.from_pretrained(which_model)
@@ -138,25 +135,20 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
     # load pre-trained model
-    sketch_model = SketchyReadingModel(clm_model=which_model, hidden_dim=hidden_dim)
     if which_config == 'cross-attention':
         intensive_model = IntensiveReadingWithCrossAttention(clm_model=which_model, hidden_dim=hidden_dim)
     else:
         intensive_model = IntensiveReadingWithMatchAttention(clm_model=which_model, hidden_dim=hidden_dim)
-    sketch_model.train()
     intensive_model.train()
 
     # GPU Config:
     if torch.cuda.device_count() > 1:
         device = torch.cuda.current_device()
-        sketch_model.to(device)
         intensive_model.to(device)
-        sketch_model = nn.DataParallel(module=sketch_model)
         intensive_model = nn.DataParallel(module=intensive_model)
         print('Use Multi GPUs. Number of GPUs: ', torch.cuda.device_count())
     elif torch.cuda.device_count() == 1:
         device = torch.cuda.current_device()
-        sketch_model.to(device)
         intensive_model.to(device)
         print('Use 1 GPU')
     else:
@@ -164,129 +156,150 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', seed=202
         print("use CPU")
 
     if torch.cuda.device_count() > 1:
-        optimizer_sketch = optim.Adam(
-            [{'params': sketch_model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
-             {'params': sketch_model.module.cls_fc_layer.parameters(), 'lr': 1e-3,
-              'weight_decay': 0.01},
-             ])
-        optimizer_intensive = optim.Adam(
+        optimizer = optim.Adam(
             [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
-             {'params': intensive_model.module.Hq_proj.parameters(), 'lr': 3e-4,
-              'weight_decay': 0.01},
-             {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 3e-4,
-              'weight_decay': 0.01},
+             {'params': intensive_model.module.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ] if config == 'match-attention' else
             [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
-             {'params': intensive_model.module.attention.parameters(), 'lr': 3e-4,
-              'weight_decay': 0.01},
-             {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 3e-4,
-              'weight_decay': 0.01},
+             {'params': intensive_model.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': intensive_model.module.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ]
         )
     else:
-        optimizer_sketch = optim.Adam([{'params': sketch_model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
-                                       {'params': sketch_model.cls_fc_layer.parameters(), 'lr': 1e-3,
-                                        'weight_decay': 0.01},
-                                       ])
-        optimizer_intensive = optim.Adam(
+        optimizer = optim.Adam(
             [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
-             {'params': intensive_model.Hq_proj.parameters(), 'lr': 3e-4,
-              'weight_decay': 0.01},
-             {'params': intensive_model.span_detect_layer.parameters(), 'lr': 3e-4,
-              'weight_decay': 0.01},
+             {'params': intensive_model.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': intensive_model.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ] if config == 'match-attention' else
             [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
-             {'params': intensive_model.attention.parameters(), 'lr': 3e-4,
-              'weight_decay': 0.01},
-             {'params': intensive_model.span_detect_layer.parameters(), 'lr': 3e-4,
-              'weight_decay': 0.01},
+             {'params': intensive_model.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': intensive_model.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': intensive_model.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ]
         )
 
-    cls_loss = nn.BCELoss(reduction='sum')  # Binary Cross Entropy Loss
+    cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
     start_end_loss = nn.CrossEntropyLoss()
 
-    best_f1 = 0.5
-    best_acc = 0.5
+    best_score = 0.25
 
-    if os.path.isfile('sketch_model_parameters.pth'):  # load previous best model
-        sketch_model.load_state_dict(torch.load('sketch_model_parameters.pth'))
-    print('a')
-    if os.path.isfile('intensive_model_parameters.pth'):
-        intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))
-    v_loss_sketch, cls_acc = test_sketch_reader(iter(dataloader_valid), sketch_model, device)
-    logger.info('E_FV: Epoch {}, Iteration {}, Sketch valid loss {:.4f}, ClS Acc {:.4f}'
-                .format(-1, -1, v_loss_sketch, cls_acc))
     for e in range(epoch):
         for i, data in enumerate(iter(dataloader_train)):
-            sketch_model.train()
             batch_encoding, is_impossibles, start_position, end_position, _ = data
-            is_impossibles = utils.move_to_device(is_impossibles, device)
-            cls_out = sketch_model(batch_encoding['input_ids'].to(device),
-                                   attention_mask=batch_encoding['attention_mask'].to(device),
-                                   token_type_ids=batch_encoding['token_type_ids'].to(device),
-                                   )
-            impossible_loss = cls_loss(cls_out, is_impossibles)
-            optimizer_sketch.zero_grad()
-            impossible_loss.backward()
-            optimizer_sketch.step()
-            if i % 1000 == 0:
-                logger.info('E_FV: Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, impossible_loss.item()))
-                v_loss_sketch, cls_acc = test_sketch_reader(iter(dataloader_valid), sketch_model, device)
-                logger.info('E_FV: Epoch {}, Iteration {}, Sketch valid loss {:.4f}, ClS Acc {:.4f}'
-                            .format(e, i, v_loss_sketch, cls_acc))
-                if cls_acc >= best_acc:  # save the best model
-                    best_acc = cls_acc
-                    torch.save(sketch_model.state_dict(), 'sketch_model_parameters.pth')
-
             intensive_model.train()
+            is_impossibles = utils.move_to_device(is_impossibles, device)
             start_position = utils.move_to_device(start_position, device)
             end_position = utils.move_to_device(end_position, device)
-            # minus one, because we removed [CLS]
+
+            # minus one, because we removed [CLS] when utils.generate_question_and_passage_hidden
             start_position = torch.where(start_position > 1, start_position - 1, start_position)
             end_position = torch.where(end_position > 1, end_position - 1, end_position)
-
             max_con_len, max_qus_len = utils.find_max_qus_con_length(attention_mask=batch_encoding['attention_mask'],
                                                                      token_type_ids=batch_encoding['token_type_ids'],
                                                                      max_length=batch_encoding['input_ids'].size(1),
                                                                      )
-            start_logits, end_logits = intensive_model(batch_encoding['input_ids'].to(device),
-                                                       attention_mask=batch_encoding['attention_mask'].to(device),
-                                                       token_type_ids=batch_encoding['token_type_ids'].to(device),
-                                                       pad_idx=tokenizer.pad_token_id,
-                                                       max_qus_length=max_qus_len,
-                                                       max_con_length=max_con_len,
-                                                       )
+            cls_output, start_logits, end_logits = intensive_model(batch_encoding['input_ids'].to(device),
+                                                                   attention_mask=batch_encoding['attention_mask']
+                                                                   .to(device),
+                                                                   token_type_ids=batch_encoding['token_type_ids']
+                                                                   .to(device),
+                                                                   pad_idx=tokenizer.pad_token_id,
+                                                                   max_qus_length=max_qus_len,
+                                                                   max_con_length=max_con_len,
+                                                                   )
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
-            span_loss = (start_loss + end_loss) / 2
-            optimizer_intensive.zero_grad()
-            span_loss.backward()
-            optimizer_intensive.step()
-            if i % 1000 == 0:
-                logger.info('I_FV: Epoch {}, Iteration {}, Train Loss: {:.4f}'.format(e, i, span_loss.item()))
-                v_loss_intensive, f1 = test_intensive_reader(iter(dataloader_valid), intensive_model, device,
-                                                             pad_idx=tokenizer.pad_token_id)
-                logger.info('I_FV: Epoch {}, Iteration {}, Intensive valid loss {:.4f}, F1-score {:.4f}'
-                            .format(e, i, v_loss_intensive, f1))
-                if f1 >= best_f1:  # save the best model
-                    best_f1 = f1
+            answerable_loss = cls_loss(cls_output, is_impossibles)
+            printable = (((start_loss + end_loss) / 2).item(), answerable_loss.item())
+            loss = (start_loss + end_loss) / 2 + answerable_loss * multitask_weight
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            if i % 500 == 0:
+                logger.info('Epoch {}, Iteration {}, Span Loss: {:.4f}, Ans Loss{:.4f}'.format(e, i, printable[0],
+                                                                                               printable[1]))
+                v_loss_intensive, acc, f1 = test(iter(dataloader_valid), intensive_model, device)
+                logger.info('Epoch {}, Iteration {}, Intensive valid loss {:.4f}, CLS acc{:.4f}, F1-score {:.4f}'
+                            .format(e, i, v_loss_intensive, acc, f1))
+                score = acc * f1
+                if score >= best_score:  # save the best model
+                    best_score = score
                     torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
 
-    sketch_model.load_state_dict(torch.load('sketch_model_parameters.pth'))
     intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))
-    test_retro_reader_learner(iter(dataloader_valid), sketch_model, intensive_model, device, tokenizer)
+
+    # refine last few layers
+    logger.info('-------------------------------------------------------------------------')
+    if torch.cuda.device_count() > 1:
+        optimizer = optim.Adam([{'params': [param for name, param in intensive_model.module.named_parameters() if
+                                            'pre_trained_clm' not in name]}], lr=3e-4, weight_decay=0.01)
+    else:
+        optimizer = optim.Adam([{'params': [param for name, param in intensive_model.named_parameters() if
+                                            'pre_trained_clm' not in name]}], lr=3e-4, weight_decay=0.01)
+
+    for e in range(50):
+        for i, data in enumerate(iter(dataloader_train)):
+            batch_encoding, is_impossibles, start_position, end_position, _ = data
+            intensive_model.train()
+            is_impossibles = utils.move_to_device(is_impossibles, device)
+            start_position = utils.move_to_device(start_position, device)
+            end_position = utils.move_to_device(end_position, device)
+
+            # minus one, because we removed [CLS] when utils.generate_question_and_passage_hidden
+            start_position = torch.where(start_position > 1, start_position - 1, start_position)
+            end_position = torch.where(end_position > 1, end_position - 1, end_position)
+            max_con_len, max_qus_len = utils.find_max_qus_con_length(attention_mask=batch_encoding['attention_mask'],
+                                                                     token_type_ids=batch_encoding['token_type_ids'],
+                                                                     max_length=batch_encoding['input_ids'].size(1),
+                                                                     )
+            cls_output, start_logits, end_logits = intensive_model(batch_encoding['input_ids'].to(device),
+                                                                   attention_mask=batch_encoding['attention_mask']
+                                                                   .to(device),
+                                                                   token_type_ids=batch_encoding['token_type_ids']
+                                                                   .to(device),
+                                                                   pad_idx=tokenizer.pad_token_id,
+                                                                   max_qus_length=max_qus_len,
+                                                                   max_con_length=max_con_len,
+                                                                   )
+            start_loss = start_end_loss(start_logits, start_position)
+            end_loss = start_end_loss(end_logits, end_position)
+            answerable_loss = cls_loss(cls_output, is_impossibles)
+            printable = (((start_loss + end_loss) / 2).item(), answerable_loss.item())
+            loss = (start_loss + end_loss) / 2 + answerable_loss * multitask_weight
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        logger.info('Epoch {}, Span Loss: {:.4f}, Ans Loss{:.4f}'
+                    .format(e, printable[0], printable[1]))
+        v_loss_intensive, acc, f1 = test(iter(dataloader_valid), intensive_model, device)
+        logger.info('Epoch {}, Intensive valid loss {:.4f}, CLS acc{:.4f}, F1-score {:.4f}'
+                    .format(e, v_loss_intensive, acc, f1))
+        score = acc * f1
+        if score >= best_score:  # save the best model
+            best_score = score
+            torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
+
+    # test our model
+    print('-------------------------------------------------------------------------')
+    intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))
+    test_multi_task_learner(iter(dataloader_valid), intensive_model, device, tokenizer)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', type=str, help='which config')
     parser.add_argument('-d', '--dataset', type=str, help='train on which dataset')
+    parser.add_argument('-w', '--multitask-weight', type=float, default=1.0, help='learn [CLS] and span jointly, given '
+                                                                                  'the loss weight')
     parser.add_argument('-s', '--seed', type=int, default=2020, help='random seed')
     args = parser.parse_args()
 
     config = args.config
     dataset = args.dataset
+    weight = args.multitask_weight
     seed = args.seed
 
     CONFIG = ['cross-attention', 'match-attention']
@@ -294,4 +307,5 @@ if __name__ == '__main__':
 
     assert config in CONFIG, 'Given config wrong'
     assert dataset in DATASET, 'Given dataset wrong'
-    main(epoch=4, which_config=config, which_dataset=dataset, seed=seed)
+    assert weight > 0, 'Given weight should be larger than zero'
+    main(epoch=4, which_config=config, which_dataset=dataset, multitask_weight=weight, seed=seed)

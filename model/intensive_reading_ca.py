@@ -1,6 +1,8 @@
 import math
+import torch
 import torch.nn as nn
 from model import utils
+from model.classification_head import ElectraClassificationHead
 from transformers import ElectraModel
 
 
@@ -8,6 +10,7 @@ class IntensiveReadingWithCrossAttention(nn.Module):
     def __init__(self, hidden_dim=256, num_heads=8, dropout=0.1, clm_model='google/electra-small-discriminator'):
         super(IntensiveReadingWithCrossAttention, self).__init__()
         self.pre_trained_clm = ElectraModel.from_pretrained(clm_model)
+        self.cls_head = ElectraClassificationHead(hidden_dim=hidden_dim, dropout=dropout, num_labels=2)
         self.attention = nn.MultiheadAttention(hidden_dim, num_heads, dropout)
         self.span_detect_layer = nn.Linear(hidden_dim, 2, bias=True)
         nn.init.xavier_uniform_(self.span_detect_layer.weight, gain=1 / math.sqrt(2))
@@ -16,6 +19,8 @@ class IntensiveReadingWithCrossAttention(nn.Module):
     def forward(self, input_ids, attention_mask, token_type_ids, pad_idx, max_qus_length, max_con_length):
         # [batch_size * seq_length * hidden_dim]
         last_hidden_state = self.pre_trained_clm(input_ids, attention_mask, token_type_ids).last_hidden_state
+        cls_output = torch.sigmoid(self.cls_head(last_hidden_state))
+
         # question_hidden, passage_hidden: [batch_size * question/passage length * hidden_dim]
         # question_pad_mask, passage_pad_mask: [batch_size * question/passage length]
         question_hidden, passage_hidden, question_pad_mask, _ = \
@@ -36,4 +41,4 @@ class IntensiveReadingWithCrossAttention(nn.Module):
         start_logits, end_logits = span_output.split(1, dim=-1)
         start_logits = start_logits.squeeze(dim=-1)
         end_logits = end_logits.squeeze(dim=-1)
-        return start_logits, end_logits
+        return cls_output, start_logits, end_logits
