@@ -13,7 +13,7 @@ class ElectraClassificationHead(nn.Module):
         x = last_layer_hidden[:, 0, :]
         x = self.dropout(x)
         x = self.dense(x)
-        x = F.gelu(x)
+        x = F.tanh(x)
         x = self.dropout(x)
         x = self.out_proj(x)
         return x
