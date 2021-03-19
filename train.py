@@ -111,7 +111,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=48, shuffle=False, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
-    # load pre-trained model
+    # initialize model
     if which_config == 'cross-attention':
         intensive_model = IntensiveReadingWithCrossAttention(clm_model=which_model, hidden_dim=hidden_dim)
     else:
@@ -134,11 +134,11 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
 
     if torch.cuda.device_count() > 1:
         optimizer = optim.Adam(
-            [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+            [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
              {'params': intensive_model.module.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ] if config == 'match-attention' else
-            [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+            [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
              {'params': intensive_model.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              {'params': intensive_model.module.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
@@ -146,11 +146,11 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
         )
     else:
         optimizer = optim.Adam(
-            [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+            [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
              {'params': intensive_model.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              {'params': intensive_model.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ] if config == 'match-attention' else
-            [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+            [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
              {'params': intensive_model.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              {'params': intensive_model.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              {'params': intensive_model.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
@@ -161,7 +161,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     start_end_loss = nn.CrossEntropyLoss()
 
     best_score = 0.25
-
+    '''
     for e in range(epoch):
         for i, data in enumerate(iter(dataloader_train)):
             batch_encoding, is_impossibles, start_position, end_position, _ = data
@@ -204,19 +204,18 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
                 if score >= best_score:  # save the best model
                     best_score = score
                     torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
+    '''
+    model_dict = intensive_model.state_dict()
+    previous_dict = torch.load('model_parameters.pth')
+    previous_dict = {k: v for k, v in previous_dict.items() if k in model_dict}
+    logger.info(len(previous_dict), 'modules have been loaded')
+    model_dict.update(previous_dict)
+    intensive_model.load_state_dict(model_dict)
 
-    intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))
-
-    # refine last few layers
+    # refine our model with cross-attention / match-attention
     logger.info('-------------------------------------------------------------------------')
-    if torch.cuda.device_count() > 1:
-        optimizer = optim.Adam([{'params': [param for name, param in intensive_model.module.named_parameters() if
-                                            'pre_trained_clm' not in name]}], lr=3e-4, weight_decay=0.01)
-    else:
-        optimizer = optim.Adam([{'params': [param for name, param in intensive_model.named_parameters() if
-                                            'pre_trained_clm' not in name]}], lr=3e-4, weight_decay=0.01)
 
-    for e in range(50):
+    for e in range(epoch):
         for i, data in enumerate(iter(dataloader_train)):
             batch_encoding, is_impossibles, start_position, end_position, _ = data
             intensive_model.train()
@@ -249,18 +248,19 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
             loss.backward()
             optimizer.step()
 
-        logger.info('Epoch {}, Span Loss: {:.4f}, Ans Loss {:.4f}'
-                    .format(e, printable[0], printable[1]))
-        v_loss_intensive, acc, f1 = test(iter(dataloader_valid), intensive_model, device, tokenizer)
-        logger.info('Epoch {}, Intensive valid loss {:.4f}, CLS acc {:.4f}, F1-score {:.4f}'
-                    .format(e, v_loss_intensive, acc, f1))
-        score = acc * f1
-        if score >= best_score:  # save the best model
-            best_score = score
-            torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
+            if i % 1000 == 0:
+                logger.info('Epoch {}, Span Loss: {:.4f}, Ans Loss {:.4f}'
+                            .format(e, printable[0], printable[1]))
+                v_loss_intensive, acc, f1 = test(iter(dataloader_valid), intensive_model, device, tokenizer)
+                logger.info('Epoch {}, Intensive valid loss {:.4f}, CLS acc {:.4f}, F1-score {:.4f}'
+                            .format(e, v_loss_intensive, acc, f1))
+                score = acc * f1
+                if score >= best_score:  # save the best model
+                    best_score = score
+                    torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
 
     # test our model
-    print('-------------------------------------------------------------------------')
+    logger.info('-------------------------------------------------------------------------')
     intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))
     test_multi_task_learner(iter(dataloader_valid), intensive_model, device, tokenizer)
 

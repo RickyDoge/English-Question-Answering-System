@@ -34,4 +34,4 @@ export DATASET_DIR=${TMP}/datasets/
 
 
 source /home/${STUDENT_ID}/miniconda3/bin/activate mlp
-python train_baseline.py -c baseline-small -d small -w 0.4
+python train.py -c cross-attention -d small
