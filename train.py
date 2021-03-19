@@ -113,20 +113,20 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
 
     # initialize model
     if which_config == 'cross-attention':
-        intensive_model = IntensiveReadingWithCrossAttention(clm_model=which_model, hidden_dim=hidden_dim)
+        retro_reader = IntensiveReadingWithCrossAttention(clm_model=which_model, hidden_dim=hidden_dim)
     else:
-        intensive_model = IntensiveReadingWithMatchAttention(clm_model=which_model, hidden_dim=hidden_dim)
-    intensive_model.train()
+        retro_reader = IntensiveReadingWithMatchAttention(clm_model=which_model, hidden_dim=hidden_dim)
+    retro_reader.train()
 
     # GPU Config:
     if torch.cuda.device_count() > 1:
         device = torch.cuda.current_device()
-        intensive_model.to(device)
-        intensive_model = nn.DataParallel(module=intensive_model)
+        retro_reader.to(device)
+        retro_reader = nn.DataParallel(module=retro_reader)
         print('Use Multi GPUs. Number of GPUs: ', torch.cuda.device_count())
     elif torch.cuda.device_count() == 1:
         device = torch.cuda.current_device()
-        intensive_model.to(device)
+        retro_reader.to(device)
         print('Use 1 GPU')
     else:
         device = torch.device('cpu')  # CPU
@@ -134,26 +134,26 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
 
     if torch.cuda.device_count() > 1:
         optimizer = optim.Adam(
-            [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
-             {'params': intensive_model.module.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+            [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+             {'params': retro_reader.module.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': retro_reader.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ] if config == 'match-attention' else
-            [{'params': intensive_model.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
-             {'params': intensive_model.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': intensive_model.module.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': intensive_model.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+            [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+             {'params': retro_reader.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': retro_reader.module.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': retro_reader.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ]
         )
     else:
         optimizer = optim.Adam(
-            [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
-             {'params': intensive_model.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': intensive_model.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+            [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+             {'params': retro_reader.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ] if config == 'match-attention' else
-            [{'params': intensive_model.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
-             {'params': intensive_model.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': intensive_model.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': intensive_model.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+            [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+             {'params': retro_reader.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': retro_reader.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+             {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ]
         )
 
@@ -165,7 +165,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     for e in range(epoch):
         for i, data in enumerate(iter(dataloader_train)):
             batch_encoding, is_impossibles, start_position, end_position, _ = data
-            intensive_model.train()
+            retro_reader.train()
             is_impossibles = utils.move_to_device(is_impossibles, device)
             start_position = utils.move_to_device(start_position, device)
             end_position = utils.move_to_device(end_position, device)
@@ -177,7 +177,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
                                                                      token_type_ids=batch_encoding['token_type_ids'],
                                                                      max_length=batch_encoding['input_ids'].size(1),
                                                                      )
-            model_output = intensive_model(batch_encoding['input_ids'].to(device),
+            model_output = retro_reader(batch_encoding['input_ids'].to(device),
                                            attention_mask=batch_encoding['attention_mask'].to(device),
                                            token_type_ids=batch_encoding['token_type_ids'].to(device),
                                            pad_idx=tokenizer.pad_token_id,
@@ -197,20 +197,20 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
             if i % 1000 == 0:
                 logger.info('Epoch {}, Iteration {}, Span Loss: {:.4f}, Ans Loss {:.4f}'.format(e, i, printable[0],
                                                                                                printable[1]))
-                v_loss_intensive, acc, f1 = test(iter(dataloader_valid), intensive_model, device, tokenizer)
+                v_loss_intensive, acc, f1 = test(iter(dataloader_valid), retro_reader, device, tokenizer)
                 logger.info('Epoch {}, Iteration {}, Intensive valid loss {:.4f}, CLS acc {:.4f}, F1-score {:.4f}'
                             .format(e, i, v_loss_intensive, acc, f1))
                 score = acc * f1
                 if score >= best_score:  # save the best model
                     best_score = score
-                    torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
+                    torch.save(retro_reader.state_dict(), 'retro_reader.pth')
     '''
-    model_dict = intensive_model.state_dict()
+    model_dict = retro_reader.state_dict()
     previous_dict = torch.load('model_parameters.pth')
     previous_dict = {k: v for k, v in previous_dict.items() if k in model_dict}
     logger.info(len(previous_dict), 'modules have been loaded')
     model_dict.update(previous_dict)
-    intensive_model.load_state_dict(model_dict)
+    retro_reader.load_state_dict(model_dict)
 
     # refine our model with cross-attention / match-attention
     logger.info('-------------------------------------------------------------------------')
@@ -218,7 +218,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     for e in range(epoch):
         for i, data in enumerate(iter(dataloader_train)):
             batch_encoding, is_impossibles, start_position, end_position, _ = data
-            intensive_model.train()
+            retro_reader.train()
             is_impossibles = utils.move_to_device(is_impossibles, device)
             start_position = utils.move_to_device(start_position, device)
             end_position = utils.move_to_device(end_position, device)
@@ -230,15 +230,15 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
                                                                      token_type_ids=batch_encoding['token_type_ids'],
                                                                      max_length=batch_encoding['input_ids'].size(1),
                                                                      )
-            cls_output, start_logits, end_logits = intensive_model(batch_encoding['input_ids'].to(device),
-                                                                   attention_mask=batch_encoding['attention_mask']
-                                                                   .to(device),
-                                                                   token_type_ids=batch_encoding['token_type_ids']
-                                                                   .to(device),
-                                                                   pad_idx=tokenizer.pad_token_id,
-                                                                   max_qus_length=max_qus_len,
-                                                                   max_con_length=max_con_len,
-                                                                   )
+            cls_output, start_logits, end_logits = retro_reader(batch_encoding['input_ids'].to(device),
+                                                                attention_mask=batch_encoding['attention_mask']
+                                                                .to(device),
+                                                                token_type_ids=batch_encoding['token_type_ids']
+                                                                .to(device),
+                                                                pad_idx=tokenizer.pad_token_id,
+                                                                max_qus_length=max_qus_len,
+                                                                max_con_length=max_con_len,
+                                                                )
             start_loss = start_end_loss(start_logits, start_position)
             end_loss = start_end_loss(end_logits, end_position)
             answerable_loss = cls_loss(cls_output, is_impossibles)
@@ -251,18 +251,19 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
             if i % 1000 == 0:
                 logger.info('Epoch {}, Span Loss: {:.4f}, Ans Loss {:.4f}'
                             .format(e, printable[0], printable[1]))
-                v_loss_intensive, acc, f1 = test(iter(dataloader_valid), intensive_model, device, tokenizer)
+                v_loss_intensive, acc, f1 = test(iter(dataloader_valid), retro_reader, device, tokenizer)
                 logger.info('Epoch {}, Intensive valid loss {:.4f}, CLS acc {:.4f}, F1-score {:.4f}'
                             .format(e, v_loss_intensive, acc, f1))
                 score = acc * f1
                 if score >= best_score:  # save the best model
                     best_score = score
-                    torch.save(intensive_model.state_dict(), 'intensive_model_parameters.pth')
+                    torch.save(retro_reader.state_dict(), 'retro_reader.pth')
 
     # test our model
     logger.info('-------------------------------------------------------------------------')
-    intensive_model.load_state_dict(torch.load('intensive_model_parameters.pth'))
-    test_multi_task_learner(iter(dataloader_valid), intensive_model, device, tokenizer)
+    retro_reader.load_state_dict(torch.load('retro_reader.pth'))
+    test_multi_task_learner(iter(dataloader_valid), retro_reader, device, tokenizer)
+    torch.save(retro_reader.module.state_dict(), 'single_gpu_model.pth')
 
 
 if __name__ == '__main__':

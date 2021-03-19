@@ -1,7 +1,14 @@
 import torch
+import torch.utils.data as tud
 import json
 import os
+import argparse
+from transformers import ElectraTokenizerFast
 from model import utils
+from model.dataset import QuestionAnsweringDataset, QuestionAnsweringDatasetConfiguration, my_collate_fn
+from model.intensive_reading_ca import IntensiveReadingWithCrossAttention
+from model.intensive_reading_ma import IntensiveReadingWithMatchAttention
+from functools import partial
 
 
 def test_multi_task_learner(valid_iterator, model, device, tokenizer):
@@ -29,7 +36,7 @@ def test_multi_task_learner(valid_iterator, model, device, tokenizer):
         json.dump(question_answer_dict, file)
 
 
-def test_retro_reader_learner(valid_iterator, sketch_model, intensive_model, device, tokenizer):
+def test_separate_learner(valid_iterator, sketch_model, intensive_model, device, tokenizer):
     question_answer_dict = dict()
     sketch_model.eval()
     with torch.no_grad():
@@ -62,3 +69,71 @@ def test_retro_reader_learner(valid_iterator, sketch_model, intensive_model, dev
                     question_answer_dict[question_id[i]] = ''
     with open(os.path.join(os.path.curdir, 'eval.json'), 'w') as file:
         json.dump(question_answer_dict, file)
+
+
+def test_retro_reader_learner(valid_iterator, model, device, tokenizer):
+    threshold = -1.
+    question_answer_dict = dict()
+    model.eval()
+
+    correct_count = 0.
+    total_count = 0.
+    with torch.no_grad():
+        for data in valid_iterator:
+            batch_encoding, is_impossibles, _, _, question_id = data
+            cls_out, start_logits, end_logits = model(batch_encoding['input_ids'].to(device),
+                                                      attention_mask=batch_encoding['attention_mask'].to(device),
+                                                      token_type_ids=batch_encoding['token_type_ids'].to(device),
+                                                      )
+            score_has = torch.max(start_pos, dim=-1) + torch.max(end_pos, dim=-1)
+            score_null = start_pos[:, 0] + end_pos[:, 0]
+            score_diff = score_null - score_has  # if larger, means more likely to be unanswerable
+            score_ext = cls_out[:, 1] - cls_out[:, 0]  # if larger, means more likely to be unanswerable
+
+            start_pos = torch.argmax(start_logits, dim=-1)  # batch_size
+            end_pos = torch.argmax(end_logits, dim=-1)  # batch_size
+            score = score_diff + score_ext  # batch_size
+
+            for i, start in enumerate(start_pos):
+                if score < threshold:  # answerable
+                    end = end_pos[i].item()
+                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start: end + 1])
+                    question_answer_dict[question_id[i]] = answer
+                    total_count += 1
+                    if is_impossibles[i][0].item() == 1:
+                        correct_count += 1
+                else:
+                    question_answer_dict[question_id[i]] = ''
+                    total_count += 1
+                    if is_impossibles[i][1].item() == 1:
+                        correct_count += 1
+    with open(os.path.join(os.path.curdir, 'eval.json'), 'w') as file:
+        json.dump(question_answer_dict, file)
+
+    return correct_count / total_count
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', type=str, help='which config')
+    args = parser.parse_args()
+    config = args.config
+
+    CONFIG = ['cross-attention', 'match-attention']
+    assert config in CONFIG, 'Given config wrong'
+
+    device = torch.cuda.current_device() if torch.cuda.is_available() else torch.device('cpu')
+
+    tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
+    config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
+    dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=16, shuffle=False, drop_last=True,
+                                      collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
+    if config == 'cross-attention':
+        retro_reader_model = IntensiveReadingWithCrossAttention()
+    else:
+        retro_reader_model = IntensiveReadingWithMatchAttention()
+
+    retro_reader_model.load_state_dict(torch.load(os.path.join('..', 'single_gpu_model.pth')))
+    cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer)
+    print("CLS accuracy: {}".format(cls_acc))
