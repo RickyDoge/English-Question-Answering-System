@@ -156,6 +156,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
              {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ]
         )
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.2)  # learning rate decay (*0.2)
 
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
     start_end_loss = nn.CrossEntropyLoss()
@@ -258,6 +259,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
                 if score >= best_score:  # save the best model
                     best_score = score
                     torch.save(retro_reader.state_dict(), 'retro_reader.pth')
+        scheduler.step()
 
     # test our model
     logger.info('-------------------------------------------------------------------------')
