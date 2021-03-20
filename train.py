@@ -4,7 +4,7 @@ import torch.utils.data as tud
 import torch.optim as optim
 import logging
 import argparse
-from evaluate.evaluate import test_multi_task_learner
+from evaluate.evaluate import test_multi_task_learner_2
 from transformers import ElectraTokenizerFast
 from model import utils
 from model.intensive_reading_ca import IntensiveReadingWithCrossAttention
@@ -156,7 +156,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
              {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ]
         )
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.2)  # learning rate decay (*0.2)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)  # learning rate decay (*0.5)
 
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
     start_end_loss = nn.CrossEntropyLoss()
@@ -264,7 +264,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     # test our model
     logger.info('-------------------------------------------------------------------------')
     retro_reader.load_state_dict(torch.load('retro_reader.pth'))
-    test_multi_task_learner(iter(dataloader_valid), retro_reader, device, tokenizer)
+    test_multi_task_learner_2(iter(dataloader_valid), retro_reader, device, tokenizer)
     torch.save(retro_reader.module.state_dict(), 'single_gpu_model.pth')
 
 
