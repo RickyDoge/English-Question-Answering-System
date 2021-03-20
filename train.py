@@ -209,7 +209,6 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     model_dict = retro_reader.state_dict()
     previous_dict = torch.load('model_parameters.pth')
     previous_dict = {k: v for k, v in previous_dict.items() if k in model_dict}
-    logger.info(len(previous_dict), 'modules have been loaded')
     model_dict.update(previous_dict)
     retro_reader.load_state_dict(model_dict)
 
