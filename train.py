@@ -135,6 +135,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     if torch.cuda.device_count() > 1:
         optimizer = optim.Adam(
             [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+             {'params': retro_reader.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              {'params': retro_reader.module.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              {'params': retro_reader.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ] if config == 'match-attention' else
@@ -147,6 +148,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     else:
         optimizer = optim.Adam(
             [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+             {'params': retro_reader.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              {'params': retro_reader.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
              ] if config == 'match-attention' else
