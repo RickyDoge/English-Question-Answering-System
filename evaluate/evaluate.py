@@ -28,7 +28,7 @@ def test_multi_task_learner(valid_iterator, model, device, tokenizer):
                 if cls.item() == 0:  # answerable
                     start = start_pos[i].item()
                     end = end_pos[i].item()
-                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start: end + 1])
+                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start + 1: end + 1])
                     question_answer_dict[question_id[i]] = answer
                 else:
                     question_answer_dict[question_id[i]] = ''
@@ -60,7 +60,7 @@ def test_multi_task_learner_2(valid_iterator, model, device, tokenizer):
                 if cls.item() == 0:  # answerable
                     start = start_pos[i].item()
                     end = end_pos[i].item()
-                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start: end + 1])
+                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start + 1: end + 1])
                     question_answer_dict[question_id[i]] = answer
                 else:
                     question_answer_dict[question_id[i]] = ''
@@ -95,7 +95,7 @@ def test_separate_learner(valid_iterator, sketch_model, intensive_model, device,
                                                                )
                     start = start_logits[i].item()
                     end = end_logits[i].item()
-                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start: end + 1])
+                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start + 1: end + 1])
                     question_answer_dict[question_id[i]] = answer
                 else:
                     question_answer_dict[question_id[i]] = ''
@@ -140,7 +140,7 @@ def test_retro_reader_learner(valid_iterator, model, device, tokenizer):
             for i, start in enumerate(start_logits):
                 if score[i] < threshold:  # answerable
                     end = end_logits[i].item()
-                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start: end + 1])
+                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start + 1: end + 1])
                     question_answer_dict[question_id[i]] = answer
                     total_count += 1
                     if is_impossibles[i][0].item() == 1:
