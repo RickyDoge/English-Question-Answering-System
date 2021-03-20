@@ -1,5 +1,5 @@
+import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class ElectraClassificationHead(nn.Module):
@@ -13,7 +13,7 @@ class ElectraClassificationHead(nn.Module):
         x = last_layer_hidden[:, 0, :]
         x = self.dropout(x)
         x = self.dense(x)
-        x = F.tanh(x)
+        x = torch.tanh(x)
         x = self.dropout(x)
         x = self.out_proj(x)
         return x

@@ -104,7 +104,10 @@ def test_separate_learner(valid_iterator, sketch_model, intensive_model, device,
 
 
 def test_retro_reader_learner(valid_iterator, model, device, tokenizer):
-    threshold = -1.
+    threshold = -4.
+    # cross-attention: (-2, 0.796), (-4, 0.797), (-6, 0.794)
+    # match-attention:
+    # convolution:
     question_answer_dict = dict()
     model.eval()
 
@@ -124,18 +127,19 @@ def test_retro_reader_learner(valid_iterator, model, device, tokenizer):
                                                       max_qus_length=max_qus_len,
                                                       max_con_length=max_con_len,
                                                       )
-            score_has = torch.max(start_pos, dim=-1) + torch.max(end_pos, dim=-1)
-            score_null = start_pos[:, 0] + end_pos[:, 0]
-            score_diff = score_null - score_has  # if larger, means more likely to be unanswerable
-            score_ext = cls_out[:, 1] - cls_out[:, 0]  # if larger, means more likely to be unanswerable
+            score_has = torch.max(start_logits, dim=-1)[0] + torch.max(end_logits, dim=-1)[0]
+            score_null = start_logits[:, 0] + end_logits[:, 0]
+            # if larger, means more likely to be unanswerable
+            score_diff = score_null - score_has
+            score_ext = torch.logit(cls_out[:, 1]) - torch.logit(cls_out[:, 0])
 
-            start_pos = torch.argmax(start_logits, dim=-1)  # batch_size
-            end_pos = torch.argmax(end_logits, dim=-1)  # batch_size
+            start_logits = torch.argmax(start_logits, dim=-1)  # batch_size
+            end_logits = torch.argmax(end_logits, dim=-1)  # batch_size
             score = score_diff + score_ext  # batch_size
 
-            for i, start in enumerate(start_pos):
-                if score < threshold:  # answerable
-                    end = end_pos[i].item()
+            for i, start in enumerate(start_logits):
+                if score[i] < threshold:  # answerable
+                    end = end_logits[i].item()
                     answer = tokenizer.decode(batch_encoding['input_ids'][i][start: end + 1])
                     question_answer_dict[question_id[i]] = answer
                     total_count += 1
@@ -166,7 +170,7 @@ if __name__ == '__main__':
     tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
     config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=16, shuffle=False, drop_last=True,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=16, shuffle=False, drop_last=False,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
     if config == 'cross-attention':
         retro_reader_model = IntensiveReadingWithCrossAttention()
@@ -174,5 +178,6 @@ if __name__ == '__main__':
         retro_reader_model = IntensiveReadingWithMatchAttention()
 
     retro_reader_model.load_state_dict(torch.load(os.path.join('..', 'single_gpu_model.pth')))
+    retro_reader_model.to(device)
     cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer)
     print("CLS accuracy: {}".format(cls_acc))
