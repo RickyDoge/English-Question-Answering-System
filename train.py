@@ -9,6 +9,7 @@ from transformers import ElectraTokenizerFast
 from model import utils
 from model.intensive_reading_ca import IntensiveReadingWithCrossAttention
 from model.intensive_reading_ma import IntensiveReadingWithMatchAttention
+from model.intensive_reading_cnn import IntensiveReadingWithConvolutionNet
 from model.dataset import my_collate_fn, QuestionAnsweringDatasetConfiguration, QuestionAnsweringDataset
 from functools import partial
 
@@ -114,8 +115,13 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     # initialize model
     if which_config == 'cross-attention':
         retro_reader = IntensiveReadingWithCrossAttention(clm_model=which_model, hidden_dim=hidden_dim)
-    else:
+    elif which_config == 'match-attention':
         retro_reader = IntensiveReadingWithMatchAttention(clm_model=which_model, hidden_dim=hidden_dim)
+    elif which_config == 'cnn-span':
+        retro_reader = IntensiveReadingWithConvolutionNet(clm_model=which_model, hidden_dim=hidden_dim, out_channel=8,
+                                                          filter_size=3)
+    else:
+        raise Exception('Wrong config error')
     retro_reader.train()
 
     # GPU Config:
@@ -133,31 +139,57 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
         print("use CPU")
 
     if torch.cuda.device_count() > 1:
-        optimizer = optim.Adam(
-            [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
-             {'params': retro_reader.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': retro_reader.module.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': retro_reader.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             ] if config == 'match-attention' else
-            [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
-             {'params': retro_reader.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': retro_reader.module.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': retro_reader.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             ]
-        )
+        if config == 'match-attention':
+            optimizer = optim.Adam(
+                [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                 {'params': retro_reader.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 {'params': retro_reader.module.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 {'params': retro_reader.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 ]
+            )
+        elif config == 'cross-attention':
+            optimizer = optim.Adam(
+                [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                 {'params': retro_reader.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 {'params': retro_reader.module.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 {'params': retro_reader.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 ]
+            )
+        elif config == 'cnn-span':
+            optimizer = optim.Adam(
+                [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                 {'params': retro_reader.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 {'params': retro_reader.module.conv.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 ]
+            )
+        else:
+            raise Exception('Wrong config error')
     else:
-        optimizer = optim.Adam(
-            [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
-             {'params': retro_reader.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': retro_reader.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             ] if config == 'match-attention' else
-            [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
-             {'params': retro_reader.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': retro_reader.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
-             ]
-        )
+        if config == 'match-attention':
+            optimizer = optim.Adam(
+                [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                 {'params': retro_reader.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 {'params': retro_reader.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 ]
+            )
+        elif config == 'cross-attention':
+            optimizer = optim.Adam(
+                [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                 {'params': retro_reader.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 {'params': retro_reader.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 ]
+            )
+        elif config == 'cnn-span':
+            optimizer = optim.Adam(
+                [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                 {'params': retro_reader.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 {'params': retro_reader.conv.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
+                 ]
+            )
+        else:
+            raise Exception('Wrong config error')
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)  # learning rate decay (*0.5)
 
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
@@ -283,7 +315,7 @@ if __name__ == '__main__':
     weight = args.multitask_weight
     seed = args.seed
 
-    CONFIG = ['cross-attention', 'match-attention']
+    CONFIG = ['cross-attention', 'match-attention', 'cnn-span']
     DATASET = ['small', 'normal']
 
     assert config in CONFIG, 'Given config wrong'
