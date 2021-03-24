@@ -19,4 +19,6 @@ class DynamicWeightAveragingWrapper():
             cls_rate = cls_loss.item() / self.last_cls_loss / self.T
             cls_rate = math.exp(cls_rate)
             sum = span_rate + cls_rate
+            self.last_span_loss = span_loss.item()
+            self.last_cls_loss = cls_loss.item()
         return (span_rate / sum) * span_loss + (cls_rate / sum) * self.scale * cls_loss
