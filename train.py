@@ -358,7 +358,11 @@ if __name__ == '__main__':
     assert config in CONFIG, 'Given config wrong'
     assert dataset in DATASET, 'Given dataset wrong'
     assert weight > 0, 'Given weight should be larger than zero'
-    print('dynamic_weight: {}'.format(dynamic_weight))
-    print('regression_loss: {}'.format(regression_loss))
+    print('Experiment config, {}'.format(config))
+    print('Dataset size, {}'.format(dataset))
+    print('Multi-task weight, 1: {}'.format(weight))
+    print('Random seed: {}'.format(seed))
+    print('dynamic_weight, {}'.format(dynamic_weight))
+    print('regression_loss, {}'.format(regression_loss))
     main(epoch=4, which_config=config, which_dataset=dataset, multitask_weight=weight, seed=seed,
          dynamic_weight_averaging=dynamic_weight, regression_loss=regression_loss)
