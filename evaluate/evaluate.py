@@ -8,6 +8,7 @@ from model import utils
 from model.dataset import QuestionAnsweringDataset, QuestionAnsweringDatasetConfiguration, my_collate_fn
 from model.intensive_reading_ca import IntensiveReadingWithCrossAttention
 from model.intensive_reading_ma import IntensiveReadingWithMatchAttention
+from model.intensive_reading_cnn import IntensiveReadingWithConvolutionNet
 from functools import partial
 
 
@@ -103,11 +104,11 @@ def test_separate_learner(valid_iterator, sketch_model, intensive_model, device,
         json.dump(question_answer_dict, file)
 
 
-def test_retro_reader_learner(valid_iterator, model, device, tokenizer):
-    threshold = -4.
-    # cross-attention: (-2, 0.796), (-4, 0.797), (-6, 0.794)
-    # match-attention:
-    # convolution:
+def test_retro_reader_learner(valid_iterator, model, device, tokenizer, threshold=5.):
+    # Threshold tuning:
+    # cross-attention (-2, 0.796), (-4, 0.797), (-6, 0.794)
+    # match-attention
+    # convolution (-3, 0.787), (-5, 0.788), (-10, 0.784)
     question_answer_dict = dict()
     model.eval()
 
@@ -136,6 +137,8 @@ def test_retro_reader_learner(valid_iterator, model, device, tokenizer):
             start_logits = torch.argmax(start_logits, dim=-1)  # batch_size
             end_logits = torch.argmax(end_logits, dim=-1)  # batch_size
             score = score_diff + score_ext  # batch_size
+            #print(score)
+            #print(is_impossibles.argmax(dim=-1))
 
             for i, start in enumerate(start_logits):
                 if score[i] < threshold:  # answerable
@@ -162,7 +165,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config = args.config
 
-    CONFIG = ['cross-attention', 'match-attention']
+    CONFIG = ['cross-attention', 'match-attention', 'cnn-span']
     assert config in CONFIG, 'Given config wrong'
 
     device = torch.cuda.current_device() if torch.cuda.is_available() else torch.device('cpu')
@@ -174,11 +177,18 @@ if __name__ == '__main__':
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
     if config == 'cross-attention':
         retro_reader_model = IntensiveReadingWithCrossAttention()
-    else:
+        ts = -4.
+    elif config == 'match-attention':
         retro_reader_model = IntensiveReadingWithMatchAttention()
+        ts = -4.
+    elif config == 'cnn-span':
+        retro_reader_model = IntensiveReadingWithConvolutionNet(out_channel=8, filter_size=3)
+        ts = -5.
+    else:
+        raise Exception('Wrong config error')
 
     retro_reader_model.load_state_dict(torch.load(os.path.join('..', 'single_gpu_model.pth')))
     retro_reader_model.to(device)
-    cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer)
-    #cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
+    cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
+    # cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
     print("CLS accuracy: {}".format(cls_acc))

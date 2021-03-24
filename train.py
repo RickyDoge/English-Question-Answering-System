@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.utils.data as tud
 import torch.optim as optim
 import logging
@@ -11,13 +12,17 @@ from model.intensive_reading_ca import IntensiveReadingWithCrossAttention
 from model.intensive_reading_ma import IntensiveReadingWithMatchAttention
 from model.intensive_reading_cnn import IntensiveReadingWithConvolutionNet
 from model.dataset import my_collate_fn, QuestionAnsweringDatasetConfiguration, QuestionAnsweringDataset
+from model.multitask_loss_wrapper import DynamicWeightAveragingWrapper
 from functools import partial
 
 
-def test(valid_iterator, model, device, tokenizer):
+def test(valid_iterator, model, device, tokenizer, regression_loss=False):
     model.eval()
     cls_loss = nn.BCELoss()
-    start_end_loss = nn.CrossEntropyLoss()
+    if regression_loss:
+        start_end_loss = nn.MSELoss()
+    else:
+        start_end_loss = nn.CrossEntropyLoss()
 
     loss_sum = 0  # loss
     loss_count = 0
@@ -49,8 +54,17 @@ def test(valid_iterator, model, device, tokenizer):
                                                       max_con_length=max_con_len,
                                                       )
             impossible_loss = cls_loss(cls_out, is_impossibles)
-            start_loss = start_end_loss(start_logits, start_position)
-            end_loss = start_end_loss(end_logits, end_position)
+            if regression_loss:
+                start_logits = F.softmax(start_logits, dim=-1)
+                start_one_hot = F.one_hot(start_position, start_logits.size(1)).float().to(device)
+                start_loss = start_end_loss(start_logits, start_one_hot)
+                end_logits = F.softmax(end_logits, dim=-1)
+                end_one_hot = F.one_hot(end_position, end_logits.size(1)).float().to(device)
+                end_loss = start_end_loss(end_logits, end_one_hot)
+            else:
+                start_loss = start_end_loss(start_logits, start_position)
+                end_loss = start_end_loss(end_logits, end_position)
+
             loss = (start_loss + end_loss) / 2 + impossible_loss
 
             loss_sum += loss.item()
@@ -77,7 +91,8 @@ def test(valid_iterator, model, device, tokenizer):
     return loss_sum / loss_count, cls_correct_count / cls_total_count, f1_sum / f1_count
 
 
-def main(epoch=4, which_config='cross-attention', which_dataset='small', multitask_weight=1.0, seed=2020):
+def main(epoch=4, which_config='cross-attention', which_dataset='small', multitask_weight=1.0, seed=2020,
+         dynamic_weight_averaging=False, regression_loss=False):
     torch.random.manual_seed(seed)
     torch.manual_seed(seed)
 
@@ -107,9 +122,9 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
         config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=48, shuffle=True, drop_last=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=8, shuffle=True, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=48, shuffle=False, drop_last=True,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=8, shuffle=False, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
     # initialize model
@@ -190,10 +205,15 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
             )
         else:
             raise Exception('Wrong config error')
+
+    dynamic_loss = DynamicWeightAveragingWrapper(scale=multitask_weight)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)  # learning rate decay (*0.5)
 
     cls_loss = nn.BCELoss()  # Binary Cross Entropy Loss
-    start_end_loss = nn.CrossEntropyLoss()
+    if regression_loss:
+        start_end_loss = nn.MSELoss()  # regression loss
+    else:
+        start_end_loss = nn.CrossEntropyLoss()  # classification loss
 
     best_score = 0.25
     '''
@@ -273,11 +293,23 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
                                                                 max_qus_length=max_qus_len,
                                                                 max_con_length=max_con_len,
                                                                 )
-            start_loss = start_end_loss(start_logits, start_position)
-            end_loss = start_end_loss(end_logits, end_position)
+            if regression_loss:
+                start_logits = F.softmax(start_logits, dim=-1)
+                start_one_hot = F.one_hot(start_position, start_logits.size(1)).float().to(device)
+                start_loss = start_end_loss(start_logits, start_one_hot)
+                end_logits = F.softmax(end_logits, dim=-1)
+                end_one_hot = F.one_hot(end_position, end_logits.size(1)).float().to(device)
+                end_loss = start_end_loss(end_logits, end_one_hot)
+            else:
+                start_loss = start_end_loss(start_logits, start_position)
+                end_loss = start_end_loss(end_logits, end_position)
+
             answerable_loss = cls_loss(cls_output, is_impossibles)
             printable = (((start_loss + end_loss) / 2).item(), answerable_loss.item())
-            loss = (start_loss + end_loss) / 2 + answerable_loss * multitask_weight
+            if dynamic_weight_averaging:
+                loss = dynamic_loss.loss((start_loss + end_loss) / 2, answerable_loss)
+            else:
+                loss = (start_loss + end_loss) / 2 + answerable_loss * multitask_weight
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -285,7 +317,8 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
             if i % 1000 == 0:
                 logger.info('Epoch {}, Span Loss: {:.4f}, Ans Loss {:.4f}'
                             .format(e, printable[0], printable[1]))
-                v_loss_intensive, acc, f1 = test(iter(dataloader_valid), retro_reader, device, tokenizer)
+                v_loss_intensive, acc, f1 = test(iter(dataloader_valid), retro_reader, device, tokenizer,
+                                                 regression_loss=regression_loss)
                 logger.info('Epoch {}, Intensive valid loss {:.4f}, CLS acc {:.4f}, F1-score {:.4f}'
                             .format(e, v_loss_intensive, acc, f1))
                 score = acc * f1
@@ -307,6 +340,8 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dataset', type=str, help='train on which dataset')
     parser.add_argument('-w', '--multitask-weight', type=float, default=1.0, help='learn [CLS] and span jointly, given '
                                                                                   'the loss weight')
+    parser.add_argument('-dw', '--dynamic-weight', action='store_true', default=False, help='dynamic weight averaging')
+    parser.add_argument('-rl', '--regression-loss', action='store_true', default=False, help='using MSE loss')
     parser.add_argument('-s', '--seed', type=int, default=2020, help='random seed')
     args = parser.parse_args()
 
@@ -314,6 +349,8 @@ if __name__ == '__main__':
     dataset = args.dataset
     weight = args.multitask_weight
     seed = args.seed
+    dynamic_weight = args.dynamic_weight
+    regression_loss = args.regression_loss
 
     CONFIG = ['cross-attention', 'match-attention', 'cnn-span']
     DATASET = ['small', 'normal']
@@ -321,4 +358,7 @@ if __name__ == '__main__':
     assert config in CONFIG, 'Given config wrong'
     assert dataset in DATASET, 'Given dataset wrong'
     assert weight > 0, 'Given weight should be larger than zero'
-    main(epoch=4, which_config=config, which_dataset=dataset, multitask_weight=weight, seed=seed)
+    print('dynamic_weight: {}'.format(dynamic_weight))
+    print('regression_loss: {}'.format(regression_loss))
+    main(epoch=4, which_config=config, which_dataset=dataset, multitask_weight=weight, seed=seed,
+         dynamic_weight_averaging=dynamic_weight, regression_loss=regression_loss)
