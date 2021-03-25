@@ -22,7 +22,7 @@ Dev: Answerable question count: 3389, Unanswerable question count: 6147
 
 Train: Answerable question count: 28272, Unanswerable question count: 49136
 
-增强后：Train: Answerable 45293, Unanswerable: 78428
+增强后：Train: Answerable 45293, Unanswerable: 78428（本来是基于选择的数据集）
 
 ----------------------------------
 
@@ -42,7 +42,7 @@ train: Original Unanswerable: 166, Answerable 43572
 
 dev: Original Unanswerable: 10, Answerable 5119
 
-增强后：train: Unanswerable: 63484, Answerable 63484
+增强后：train: Unanswerable: 63484, Answerable 63484（本来是基于选择的数据集）
 
 -----------------------
 
@@ -62,5 +62,5 @@ train: Unanswerable: 0, Answerable 1620
 
 dev: Unanswerable: 0, Answerable 342
 
-增强后：train: Unanswerable: 2620, Answerable 2620
+增强后：train: Unanswerable: 2620, Answerable 2620（本来是基于选择的数据集）
 
