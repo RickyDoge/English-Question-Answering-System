@@ -29,7 +29,7 @@ class IntensiveReadingWithMatchAttention(nn.Module):
         question_hidden = question_hidden.to(H.device)
         passage_hidden = passage_hidden.to(H.device)
         question_pad_mask = question_pad_mask.to(H.device)
-        question_hidden.masked_fill_(question_pad_mask.unsqueeze(dim=-1), value=float(-1e9))
+       # question_hidden.masked_fill_(question_pad_mask.unsqueeze(dim=-1), value=float(-1e9))
 
         Hq = self.Hq_proj(question_hidden)
         # passage_hidden(Hp): [batch_size * context_length * hidden_dim], Hq: [batch_size * question_length * hidden_dim]
