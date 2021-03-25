@@ -108,7 +108,6 @@ def test_retro_reader_learner(valid_iterator, model, device, tokenizer, threshol
     # Threshold tuning:
     # cross-attention (-2, 0.796), (-4, 0.797), (-6, 0.794)
     # match-attention
-    # convolution (-3, 0.787), (-5, 0.788), (-10, 0.784)
     question_answer_dict = dict()
     model.eval()
 
@@ -137,8 +136,8 @@ def test_retro_reader_learner(valid_iterator, model, device, tokenizer, threshol
             start_logits = torch.argmax(start_logits, dim=-1)  # batch_size
             end_logits = torch.argmax(end_logits, dim=-1)  # batch_size
             score = score_diff + score_ext  # batch_size
-            #print(score)
-            #print(is_impossibles.argmax(dim=-1))
+            # print(score)
+            # print(is_impossibles.argmax(dim=-1))
 
             for i, start in enumerate(start_logits):
                 if score[i] < threshold:  # answerable
@@ -182,8 +181,8 @@ if __name__ == '__main__':
         retro_reader_model = IntensiveReadingWithMatchAttention()
         ts = -4.
     elif config == 'cnn-span':
-        retro_reader_model = IntensiveReadingWithConvolutionNet(out_channel=8, filter_size=3)
-        ts = -5.
+        retro_reader_model = IntensiveReadingWithConvolutionNet(out_channel=48, filter_size=3)
+        ts = -1.  # 8 channels: -4 / 16 channels: -1 / 48 channels: -1
     else:
         raise Exception('Wrong config error')
 
