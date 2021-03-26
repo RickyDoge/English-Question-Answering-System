@@ -133,7 +133,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     elif which_config == 'match-attention':
         retro_reader = IntensiveReadingWithMatchAttention(clm_model=which_model, hidden_dim=hidden_dim)
     elif which_config == 'cnn-span':
-        retro_reader = IntensiveReadingWithConvolutionNet(clm_model=which_model, hidden_dim=hidden_dim, out_channel=8,
+        retro_reader = IntensiveReadingWithConvolutionNet(clm_model=which_model, hidden_dim=hidden_dim, out_channel=100,
                                                           filter_size=3)
     else:
         raise Exception('Wrong config error')

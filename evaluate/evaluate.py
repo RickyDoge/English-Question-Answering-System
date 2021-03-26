@@ -182,12 +182,14 @@ if __name__ == '__main__':
         ts = -4.
     elif config == 'cnn-span':
         retro_reader_model = IntensiveReadingWithConvolutionNet(out_channel=100, filter_size=3)
-        ts = -1.  # 8 channels: -4 / 16 channels: -1 / 48 channels: -1 (DWA -5) / 100 channels:
+        ts = -1.
+        # 8 channels: -4 / 16 channels: -1 / 48 channels: -1 (DWA -5)
+        # 100 channels: (DWA -1)
     else:
         raise Exception('Wrong config error')
 
     retro_reader_model.load_state_dict(torch.load(os.path.join('..', 'single_gpu_model.pth')))
     retro_reader_model.to(device)
-    #cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
-    cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
+    cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
+    #cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
     print("CLS accuracy: {}".format(cls_acc))
