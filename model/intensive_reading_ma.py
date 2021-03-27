@@ -26,14 +26,21 @@ class IntensiveReadingWithMatchAttention(nn.Module):
         question_hidden, passage_hidden, question_pad_mask, _ = \
             utils.generate_question_and_passage_hidden(H, attention_mask, token_type_ids, pad_idx, max_qus_length,
                                                        max_con_length)
+
+        context_length = passage_hidden.size(1)
+
         question_hidden = question_hidden.to(H.device)
         passage_hidden = passage_hidden.to(H.device)
         question_pad_mask = question_pad_mask.to(H.device)
-       # question_hidden.masked_fill_(question_pad_mask.unsqueeze(dim=-1), value=float(-1e9))
 
         Hq = self.Hq_proj(question_hidden)
         # passage_hidden(Hp): [batch_size * context_length * hidden_dim], Hq: [batch_size * question_length * hidden_dim]
         attn_scores = torch.bmm(passage_hidden, Hq.transpose(1, 2))  # attn_scores: [batch_size * context_length * question_length]
+        question_pad_mask = question_pad_mask.unsqueeze(dim=1)
+        question_pad_mask = question_pad_mask.repeat(1, context_length, 1)
+        attn_scores = attn_scores.masked_fill(question_pad_mask, 1e-9)
+        # question_hidden.masked_fill_(question_pad_mask.unsqueeze(dim=-1), value=float(-1e9))
+
         M = F.softmax(attn_scores, dim=-1)
         # M: [batch_size * context_length * question_length], Hq: [batch_size * question_length * hidden_dim]
         # Hp_pri: [batch_size * context_length * hidden_dim]
