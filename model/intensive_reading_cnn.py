@@ -36,12 +36,12 @@ class IntensiveReadingWithConvolutionNet(nn.Module):
 
 
 class TextConvolutionClassificationHead(nn.Module):
-    def __init__(self, out_channel=8, filter_size=3, hidden_dim=256):
+    def __init__(self, out_channel=8, filter_size=3, hidden_dim=256, dropout=0.5):
         super(TextConvolutionClassificationHead, self).__init__()
         assert filter_size == 3 or filter_size == 5, 'filter_size only allows to be 3 and 5'
         pad_length = 1 if filter_size == 3 else 2
         self.conv = nn.Conv2d(1, out_channel, kernel_size=(filter_size, hidden_dim), padding=(pad_length, 0))
-        self.batchNorm = nn.BatchNorm2d(out_channel)
+        self.dropout = nn.Dropout(dropout)
         self.cls_layer = nn.Linear(out_channel, 2)
         nn.init.xavier_uniform_(self.conv.weight, gain=1 / math.sqrt(2))
         nn.init.xavier_uniform_(self.cls_layer.weight, gain=1 / math.sqrt(2))
@@ -49,7 +49,7 @@ class TextConvolutionClassificationHead(nn.Module):
     def forward(self, passage_hidden):
         # input: [batch_size * passage_length * hidden_dim]
         x = self.conv(passage_hidden.unsqueeze(dim=1))
-        x = torch.relu(self.batchNorm(x))
+        x = torch.relu(self.dropout(x))
         x = x.squeeze(dim=-1).transpose(1, 2)  #: [batch_size * passage_length * num_channels]
         x = self.cls_layer(x)
         return x

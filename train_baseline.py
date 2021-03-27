@@ -177,6 +177,7 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', multitas
             optimizer.step()
 
     model.load_state_dict(torch.load('model_parameters.pth'))
+    torch.save(model.module.state_dict(), 'single_gpu_model.pth')
     test_multi_task_learner(iter(dataloader_valid), model, device, tokenizer)
 
 
