@@ -6,6 +6,7 @@ import argparse
 from transformers import ElectraTokenizerFast
 from model import utils
 from model.dataset import QuestionAnsweringDataset, QuestionAnsweringDatasetConfiguration, my_collate_fn
+from model.baseline import BaselineModel
 from model.intensive_reading_ca import IntensiveReadingWithCrossAttention
 from model.intensive_reading_ma import IntensiveReadingWithMatchAttention
 from model.intensive_reading_cnn import IntensiveReadingWithConvolutionNet
@@ -164,7 +165,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config = args.config
 
-    CONFIG = ['cross-attention', 'match-attention', 'cnn-span']
+    CONFIG = ['cross-attention', 'match-attention', 'cnn-span', 'baseline', 'cnn-span-large', 'cross-attention-large']
     assert config in CONFIG, 'Given config wrong'
 
     device = torch.cuda.current_device() if torch.cuda.is_available() else torch.device('cpu')
@@ -172,24 +173,38 @@ if __name__ == '__main__':
     tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
     config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=16, shuffle=False, drop_last=False,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=4, shuffle=False, drop_last=False,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
     if config == 'cross-attention':
         retro_reader_model = IntensiveReadingWithCrossAttention()
-        ts = -1.  # normal: -4 / lr: -1 / lr+dwa:
+        ts = -1.  # normal: -4 / lr: -1 / dwa: -1
     elif config == 'match-attention':
         retro_reader_model = IntensiveReadingWithMatchAttention()
-        ts = -4.
+        ts = -1.  # dwa: -1
     elif config == 'cnn-span':
         retro_reader_model = IntensiveReadingWithConvolutionNet(out_channel=100, filter_size=3)
         ts = -1.
         # 8 channels: -4 / 16 channels: -1 / 48 channels: -1 (DWA -5)
-        # 100 channels: (DWA -1)
+        # 100 channels: -1 (DWA -1)
+    elif config == 'baseline':
+        retro_reader_model = BaselineModel()
+        ts = -1.
+    elif config == 'cnn-span-large':
+        retro_reader_model = IntensiveReadingWithConvolutionNet(out_channel=100, filter_size=3, hidden_dim=768,
+                                                                clm_model='google/electra-base-discriminator')
+        ts = -1.
+    elif config == 'cross-attention-large':
+        retro_reader_model = IntensiveReadingWithCrossAttention(hidden_dim=768,
+                                                                clm_model='google/electra-base-discriminator')
+        ts = -1.
     else:
         raise Exception('Wrong config error')
 
     retro_reader_model.load_state_dict(torch.load(os.path.join('..', 'single_gpu_model.pth')))
     retro_reader_model.to(device)
-    cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
-    #cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
+    if config == 'baseline':
+        cls_acc = test_multi_task_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer)
+    else:
+        # cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
+        cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
     print("CLS accuracy: {}".format(cls_acc))

@@ -106,8 +106,14 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     logger.addHandler(handler)
 
     # load configuration
-    hidden_dim = 256
-    which_model = 'google/electra-small-discriminator'
+    if config == 'cnn-span-large' or config == 'cross-attention-large':
+        batch = 32
+        hidden_dim = 768
+        which_model = 'google/electra-base-discriminator'
+    else:
+        batch = 48
+        hidden_dim = 256
+        which_model = 'google/electra-small-discriminator'
 
     # load dataset
     tokenizer = ElectraTokenizerFast.from_pretrained(which_model)
@@ -122,17 +128,17 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
         config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=48, shuffle=True, drop_last=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=batch, shuffle=True, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=48, shuffle=False, drop_last=True,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=batch, shuffle=False, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
     # initialize model
-    if which_config == 'cross-attention':
+    if which_config == 'cross-attention' or which_config == 'cross-attention-large':
         retro_reader = IntensiveReadingWithCrossAttention(clm_model=which_model, hidden_dim=hidden_dim)
     elif which_config == 'match-attention':
         retro_reader = IntensiveReadingWithMatchAttention(clm_model=which_model, hidden_dim=hidden_dim)
-    elif which_config == 'cnn-span':
+    elif which_config == 'cnn-span' or which_config == 'cnn-span-large':
         retro_reader = IntensiveReadingWithConvolutionNet(clm_model=which_model, hidden_dim=hidden_dim, out_channel=100,
                                                           filter_size=3)
     else:
@@ -352,7 +358,7 @@ if __name__ == '__main__':
     dynamic_weight = args.dynamic_weight
     regression_loss = args.regression_loss
 
-    CONFIG = ['cross-attention', 'match-attention', 'cnn-span']
+    CONFIG = ['cross-attention', 'match-attention', 'cnn-span', 'cnn-span-large', 'cross-attention-large']
     DATASET = ['small', 'normal']
 
     assert config in CONFIG, 'Given config wrong'
