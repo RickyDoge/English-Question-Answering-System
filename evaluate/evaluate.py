@@ -30,7 +30,7 @@ def test_multi_task_learner(valid_iterator, model, device, tokenizer):
                 if cls.item() == 0:  # answerable
                     start = start_pos[i].item()
                     end = end_pos[i].item()
-                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start + 1: end + 1])
+                    answer = tokenizer.decode(batch_encoding['input_ids'][i][start: end])
                     question_answer_dict[question_id[i]] = answer
                 else:
                     question_answer_dict[question_id[i]] = ''
@@ -205,6 +205,6 @@ if __name__ == '__main__':
     if config == 'baseline':
         cls_acc = test_multi_task_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer)
     else:
-        # cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
-        cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
+        cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
+        # cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
     print("CLS accuracy: {}".format(cls_acc))
