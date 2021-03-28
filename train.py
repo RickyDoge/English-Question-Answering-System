@@ -108,7 +108,7 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     # load configuration
     if config == 'cnn-span-large' or config == 'cross-attention-large':
         lr = 1e-5
-        batch_size = 32
+        batch_size = 24
         hidden_dim = 768
         which_model = 'google/electra-base-discriminator'
     else:
