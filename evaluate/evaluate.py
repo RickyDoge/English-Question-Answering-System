@@ -169,12 +169,16 @@ if __name__ == '__main__':
     assert config in CONFIG, 'Given config wrong'
 
     device = torch.cuda.current_device() if torch.cuda.is_available() else torch.device('cpu')
+    if config == 'cnn-span-large' or config == 'cross-attention-large':
+        tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-base-discriminator')
+    else:
+        tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
 
-    tokenizer = ElectraTokenizerFast.from_pretrained('google/electra-small-discriminator')
     config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
     dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=4, shuffle=False, drop_last=False,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
+
     if config == 'cross-attention':
         retro_reader_model = IntensiveReadingWithCrossAttention()
         ts = -1.  # normal: -4 / lr: -1 / dwa: -1

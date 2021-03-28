@@ -107,11 +107,13 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
 
     # load configuration
     if config == 'cnn-span-large' or config == 'cross-attention-large':
-        batch = 32
+        lr = 1e-5
+        batch_size = 32
         hidden_dim = 768
         which_model = 'google/electra-base-discriminator'
     else:
-        batch = 48
+        lr = 1e-4
+        batch_size = 48
         hidden_dim = 256
         which_model = 'google/electra-small-discriminator'
 
@@ -128,9 +130,9 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
         config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=batch, shuffle=True, drop_last=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=batch_size, shuffle=True, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=batch, shuffle=False, drop_last=True,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=batch_size, shuffle=False, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
     # initialize model
@@ -162,23 +164,23 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     if torch.cuda.device_count() > 1:
         if config == 'match-attention':
             optimizer = optim.Adam(
-                [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': lr, 'eps': 1e-6},
                  {'params': retro_reader.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  {'params': retro_reader.module.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  {'params': retro_reader.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  ]
             )
-        elif config == 'cross-attention':
+        elif config == 'cross-attention' or config == 'cross-attention-large':
             optimizer = optim.Adam(
-                [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': lr, 'eps': 1e-6},
                  {'params': retro_reader.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  {'params': retro_reader.module.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  {'params': retro_reader.module.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  ]
             )
-        elif config == 'cnn-span':
+        elif config == 'cnn-span' or config == 'cnn-span-large':
             optimizer = optim.Adam(
-                [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                [{'params': retro_reader.module.pre_trained_clm.parameters(), 'lr': lr, 'eps': 1e-6},
                  {'params': retro_reader.module.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  {'params': retro_reader.module.conv.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  ]
@@ -188,23 +190,23 @@ def main(epoch=4, which_config='cross-attention', which_dataset='small', multita
     else:
         if config == 'match-attention':
             optimizer = optim.Adam(
-                [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': lr, 'eps': 1e-6},
                  {'params': retro_reader.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  {'params': retro_reader.Hq_proj.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  ]
             )
-        elif config == 'cross-attention':
+        elif config == 'cross-attention' or config == 'cross-attention-large':
             optimizer = optim.Adam(
-                [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': lr, 'eps': 1e-6},
                  {'params': retro_reader.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  {'params': retro_reader.attention.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  {'params': retro_reader.span_detect_layer.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  ]
             )
-        elif config == 'cnn-span':
+        elif config == 'cnn-span' or config == 'cnn-span-large':
             optimizer = optim.Adam(
-                [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': 1e-4, 'eps': 1e-6},
+                [{'params': retro_reader.pre_trained_clm.parameters(), 'lr': lr, 'eps': 1e-6},
                  {'params': retro_reader.cls_head.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  {'params': retro_reader.conv.parameters(), 'lr': 1e-3, 'weight_decay': 0.01},
                  ]

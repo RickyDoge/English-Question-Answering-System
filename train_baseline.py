@@ -81,9 +81,13 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', multitas
 
     # load configuration
     if which_config == 'baseline-small':
+        learning_rate = 1e-4
+        batch_size = 48
         hidden_dim = 256
         which_model = 'google/electra-small-discriminator'
     elif which_config == 'baseline-base':
+        learning_rate = 3e-5
+        batch_size = 24
         hidden_dim = 768
         which_model = 'google/electra-base-discriminator'
 
@@ -100,9 +104,9 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', multitas
         config_valid = QuestionAnsweringDatasetConfiguration(squad_dev=True)
     dataset_train = QuestionAnsweringDataset(config_train, tokenizer=tokenizer)
     dataset_valid = QuestionAnsweringDataset(config_valid, tokenizer=tokenizer)
-    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=48, shuffle=True, drop_last=True,
+    dataloader_train = tud.DataLoader(dataset=dataset_train, batch_size=batch_size, shuffle=True, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
-    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=48, shuffle=False, drop_last=True,
+    dataloader_valid = tud.DataLoader(dataset=dataset_valid, batch_size=batch_size, shuffle=False, drop_last=True,
                                       collate_fn=partial(my_collate_fn, tokenizer=tokenizer))
 
     # load pre-trained model
@@ -124,13 +128,13 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', multitas
         print("use CPU")
 
     if torch.cuda.device_count() > 1:
-        optimizer = optim.Adam([{'params': model.module.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+        optimizer = optim.Adam([{'params': model.module.pre_trained_clm.parameters(), 'lr': learning_rate, 'eps': 1e-6},
                                 {'params': model.module.cls_fc_layer.parameters(), 'lr': 3e-4, 'weight_decay': 0.01},
                                 {'params': model.module.span_detect_layer.parameters(), 'lr': 3e-4,
                                  'weight_decay': 0.01},
                                 ])
     else:
-        optimizer = optim.Adam([{'params': model.pre_trained_clm.parameters(), 'lr': 3e-4, 'eps': 1e-6},
+        optimizer = optim.Adam([{'params': model.pre_trained_clm.parameters(), 'lr': learning_rate, 'eps': 1e-6},
                                 {'params': model.cls_fc_layer.parameters(), 'lr': 3e-4, 'weight_decay': 0.01},
                                 {'params': model.span_detect_layer.parameters(), 'lr': 3e-4, 'weight_decay': 0.01},
                                 ])
