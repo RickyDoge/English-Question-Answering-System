@@ -106,9 +106,6 @@ def test_separate_learner(valid_iterator, sketch_model, intensive_model, device,
 
 
 def test_retro_reader_learner(valid_iterator, model, device, tokenizer, threshold=5.):
-    # Threshold tuning:
-    # cross-attention (-2, 0.796), (-4, 0.797), (-6, 0.794)
-    # match-attention
     question_answer_dict = dict()
     model.eval()
 
@@ -184,15 +181,17 @@ if __name__ == '__main__':
         ts = -1.  # normal: -4 / lr: -1 / dwa: -1
     elif config == 'match-attention':
         retro_reader_model = IntensiveReadingWithMatchAttention()
-        ts = -1.  # dwa: -1
+        ts = -1.  # normal: -4 / dwa: -1
     elif config == 'cnn-span':
         retro_reader_model = IntensiveReadingWithConvolutionNet(out_channel=100, filter_size=3)
         ts = -1.
-        # 8 channels: -4 / 16 channels: -1 / 48 channels: -1 (DWA -5)
+        # 8 channels: -4 / 16 channels: -1 / 48 channels: -1 (DWA -4)
         # 100 channels: -1 (DWA -1)
     elif config == 'baseline':
         retro_reader_model = BaselineModel()
         ts = -1.
+    elif config == 'baseline-large':
+        retro_reader_model = BaselineModel(hidden_dim=768, clm_model='google/electra-base-discriminator')
     elif config == 'cnn-span-large':
         retro_reader_model = IntensiveReadingWithConvolutionNet(out_channel=100, filter_size=3, hidden_dim=768,
                                                                 clm_model='google/electra-base-discriminator')
@@ -206,9 +205,9 @@ if __name__ == '__main__':
 
     retro_reader_model.load_state_dict(torch.load(os.path.join('..', 'single_gpu_model.pth')))
     retro_reader_model.to(device)
-    if config == 'baseline':
+    if config == 'baseline' or config == 'baseline-large':
         cls_acc = test_multi_task_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer)
     else:
-        cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
-        # cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
+        #cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
+        cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
     print("CLS accuracy: {}".format(cls_acc))
