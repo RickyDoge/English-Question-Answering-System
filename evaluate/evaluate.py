@@ -195,11 +195,11 @@ if __name__ == '__main__':
     elif config == 'cnn-span-large':
         retro_reader_model = IntensiveReadingWithConvolutionNet(out_channel=100, filter_size=3, hidden_dim=768,
                                                                 clm_model='google/electra-base-discriminator')
-        ts = -1.
+        ts = -4.
     elif config == 'cross-attention-large':
         retro_reader_model = IntensiveReadingWithCrossAttention(hidden_dim=768,
                                                                 clm_model='google/electra-base-discriminator')
-        ts = -1.
+        ts = -4.
     else:
         raise Exception('Wrong config error')
 
@@ -208,6 +208,6 @@ if __name__ == '__main__':
     if config == 'baseline' or config == 'baseline-large':
         cls_acc = test_multi_task_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer)
     else:
-        #cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
-        cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
+        cls_acc = test_retro_reader_learner(iter(dataloader_valid), retro_reader_model, device, tokenizer, threshold=ts)
+        #cls_acc = test_multi_task_learner_2(iter(dataloader_valid), retro_reader_model, device, tokenizer)
     print("CLS accuracy: {}".format(cls_acc))
