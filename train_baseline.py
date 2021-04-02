@@ -81,12 +81,12 @@ def main(epoch=4, which_config='baseline-small', which_dataset='small', multitas
 
     # load configuration
     if which_config == 'baseline-small':
-        learning_rate = 3e-4
+        learning_rate = 1e-4
         batch_size = 48
         hidden_dim = 256
         which_model = 'google/electra-small-discriminator'
     elif which_config == 'baseline-base':
-        learning_rate = 3e-5
+        learning_rate = 2e-5
         batch_size = 24
         hidden_dim = 768
         which_model = 'google/electra-base-discriminator'
