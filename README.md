@@ -1,5 +1,7 @@
 # English Question Answering System
 
+Span detection style Open-domain QA (Pretrained Model)。机器问答
+
 #### Require:
 
 [PyTorch](https://pytorch.org/get-started/locally/)
